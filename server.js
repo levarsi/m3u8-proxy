@@ -271,9 +271,9 @@ app.get('/proxy', async (req, res) => {
       }
     }
     
-    // 处理M3U8
+    // 处理M3U8（异步支持TS检测）
     const startTime = Date.now();
-    const result = m3u8Processor.process(originalM3u8, targetUrl);
+    const result = await m3u8Processor.process(originalM3u8, targetUrl);
     const processingTime = Date.now() - startTime;
     
     logger.info('M3U8处理完成', { 
@@ -641,7 +641,117 @@ app.get('/logs/stats', (req, res) => {
 });
 
 // ==========================================
-// 12. 清除日志接口
+// 12. TS检测管理接口
+// ==========================================
+app.get('/ts-detector/stats', (req, res) => {
+  try {
+    const stats = m3u8Processor.tsDetector.getStats();
+    const tsDetectionStats = m3u8Processor.getStats().tsDetectionStats;
+    
+    res.json({
+      detector: stats,
+      processor: tsDetectionStats,
+      config: {
+        enabled: config.adFilter.enableTSDetection,
+        thresholds: m3u8Processor.tsDetector.thresholds,
+        cacheSize: m3u8Processor.tsDetector.metadataCache.size
+      }
+    });
+  } catch (error) {
+    logger.error('获取TS检测统计失败', error);
+    res.status(500).json({
+      error: '获取TS检测统计失败',
+      message: error.message
+    });
+  }
+});
+
+app.post('/ts-detector/clear-cache', (req, res) => {
+  try {
+    m3u8Processor.tsDetector.clearCache();
+    res.json({
+      success: true,
+      message: 'TS检测缓存已清除',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('清除TS检测缓存失败', error);
+    res.status(500).json({
+      error: '清除缓存失败',
+      message: error.message
+    });
+  }
+});
+
+app.post('/ts-detector/reset-stats', (req, res) => {
+  try {
+    m3u8Processor.tsDetector.resetStats();
+    res.json({
+      success: true,
+      message: 'TS检测统计已重置',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('重置TS检测统计失败', error);
+    res.status(500).json({
+      error: '重置统计失败',
+      message: error.message
+    });
+  }
+});
+
+app.get('/ts-detector/config', (req, res) => {
+  try {
+    res.json({
+      thresholds: m3u8Processor.tsDetector.thresholds,
+      config: config.adFilter.tsDetection,
+      enabled: config.adFilter.enableTSDetection
+    });
+  } catch (error) {
+    logger.error('获取TS检测配置失败', error);
+    res.status(500).json({
+      error: '获取配置失败',
+      message: error.message
+    });
+  }
+});
+
+app.post('/ts-detector/config', express.json(), (req, res) => {
+  try {
+    const updates = req.body;
+    
+    // 更新阈值配置
+    if (updates.thresholds) {
+      Object.assign(m3u8Processor.tsDetector.thresholds, updates.thresholds);
+    }
+    
+    // 更新配置
+    if (updates.config) {
+      Object.assign(config.adFilter.tsDetection, updates.config);
+    }
+    
+    logger.info('TS检测配置已更新', { updates });
+    
+    res.json({
+      success: true,
+      message: 'TS检测配置更新成功',
+      timestamp: new Date().toISOString(),
+      currentConfig: {
+        thresholds: m3u8Processor.tsDetector.thresholds,
+        config: config.adFilter.tsDetection
+      }
+    });
+  } catch (error) {
+    logger.error('更新TS检测配置失败', error);
+    res.status(400).json({
+      error: '配置更新失败',
+      message: error.message
+    });
+  }
+});
+
+// ==========================================
+// 13. 清除日志接口
 // ==========================================
 app.delete('/logs', (req, res) => {
   try {

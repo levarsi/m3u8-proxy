@@ -1,6 +1,8 @@
 const url = require('url');
+const axios = require('axios');
 const config = require('./config');
 const logger = require('./logger');
+const TSMetadataDetector = require('./ts-metadata-detector');
 
 /**
  * M3U8处理器类 - 增强版
@@ -16,20 +18,33 @@ class M3U8Processor {
     ];
     this.baseUrl = '';
     this.isAdFilterEnabled = config.adFilter.enabled;
+    
+    // 初始化TS元数据检测器
+    this.tsDetector = new TSMetadataDetector(options.tsDetector || {});
+    
+    // 配置是否启用TS内容检测
+    this.enableTSDetection = config.adFilter.enableTSDetection !== false;
+    
     this.stats = {
       totalProcessed: 0,
       adsFiltered: 0,
       segmentsKept: 0,
-      processingTime: 0
+      processingTime: 0,
+      tsDetectionStats: {
+        totalAnalyzed: 0,
+        adsDetectedByTS: 0,
+        tsAnalysisTime: 0
+      }
     };
   }
 
   /**
-   * 检测是否为广告片段 - 增强版
+   * 检测是否为广告片段 - 增强版（集成TS检测）
    * @param {string} line - M3U8行内容
-   * @returns {boolean} 是否为广告
+   * @param {number} currentDuration - 当前片段时长
+   * @returns {Promise<boolean>} 是否为广告
    */
-  isAdvertisement(line) {
+  async isAdvertisement(line, currentDuration = null) {
     if (!this.isAdFilterEnabled) return false;
     
     // 基础关键词检测
@@ -47,9 +62,18 @@ class M3U8Processor {
     }
     
     // 高级检测：基于时长的广告检测
-    if (this.isDurationBasedAd(line)) {
+    if (this.isDurationBasedAd(line, currentDuration)) {
       this.logFilterAction('时长广告拦截', line, 'DURATION');
       return true;
+    }
+    
+    // 新增：TS内容检测
+    if (this.enableTSDetection) {
+      const tsAdResult = await this.isAdByTSContent(line);
+      if (tsAdResult.isAd) {
+        this.logFilterAction('TS内容广告拦截', line, `TS_CONTENT_${tsAdResult.probability.toFixed(2)}`);
+        return true;
+      }
     }
     
     return false;
@@ -90,12 +114,97 @@ class M3U8Processor {
   /**
    * 基于时长的广告检测（需要与前一个EXTINF标签配合）
    * @param {string} line - URL行
+   * @param {number} currentDuration - 当前片段时长
    * @returns {boolean} 是否为广告
    */
-  isDurationBasedAd(line) {
-    // 检测非标准时长的片段（通常是广告）
-    // 这个方法需要与process方法中的EXTINF解析配合使用
-    return false; // 在process方法中实现具体逻辑
+  isDurationBasedAd(line, currentDuration = null) {
+    if (!currentDuration) return false;
+    
+    // 仅检测明确的广告特征时长（保守策略）
+    const exactAdDurations = [5, 10, 15];  // 精确的广告时长
+    const roundedDuration = Math.round(currentDuration);
+    const isExactAdDuration = exactAdDurations.includes(roundedDuration);
+    
+    // 检测异常短时长（仅过滤明显无效的超短片段）
+    const isTooShort = currentDuration < 0.5;
+    
+    // 必须同时满足多个条件才判断为广告
+    // 只有明确的广告时长且URL也符合广告特征时才判定
+    if (isExactAdDuration && this.containsAdKeywords(line)) {
+      return true;
+    }
+    
+    // 仅过滤明显无效的超短片段，不误删正常的短片段
+    return isTooShort;
+  }
+
+  /**
+   * 检查URL是否包含广告关键词（避免递归调用）
+   * @param {string} line - URL行
+   * @returns {boolean} 是否包含广告关键词
+   */
+  containsAdKeywords(line) {
+    // 仅检查基本的广告关键词，避免过于激进的检测
+    const adKeywords = [
+      'ad_', 'advertisement', 'commercial'
+    ];
+    
+    return adKeywords.some(keyword => 
+      line.toLowerCase().includes(keyword.toLowerCase())
+    );
+  }
+
+  /**
+   * 基于TS内容的广告检测
+   * @param {string} line - TS文件URL
+   * @returns {Promise<object>} 检测结果
+   */
+  async isAdByTSContent(line) {
+    const startTime = Date.now();
+    this.stats.tsDetectionStats.totalAnalyzed++;
+    
+    try {
+      // 构建完整的TS文件URL
+      const tsUrl = this.resolveUrl(line);
+      
+      // 创建上下文信息
+      const context = {
+        url: tsUrl,
+        baseUrl: this.baseUrl,
+        segmentUrl: line
+      };
+      
+      // 执行TS内容检测
+      const result = await this.tsDetector.detectAdFeatures(tsUrl, context);
+      
+      // 更新统计
+      this.stats.tsDetectionStats.tsAnalysisTime += Date.now() - startTime;
+      if (result.isAd) {
+        this.stats.tsDetectionStats.adsDetectedByTS++;
+      }
+      
+      logger.debug('TS内容检测完成', {
+        url: tsUrl,
+        isAd: result.isAd,
+        probability: result.probability,
+        confidence: result.confidence,
+        analysisTime: result.analysisTime
+      });
+      
+      return result;
+      
+    } catch (error) {
+      logger.error('TS内容检测失败', error, { url: line });
+      
+      // 检测失败时返回保守结果
+      return {
+        isAd: false,
+        probability: 0,
+        confidence: 0,
+        error: error.message,
+        analysisTime: Date.now() - startTime
+      };
+    }
   }
 
   /**
@@ -121,10 +230,8 @@ class M3U8Processor {
       logger.info(`广告过滤: ${action}`);
     }
     
-    // 更新统计信息
-    if (action.includes('拦截')) {
-      this.stats.adsFiltered++;
-    }
+    // 注意：统计信息在process方法中更新，这里不再重复更新
+    // 避免重复计算导致统计错误
   }
 
   /**
@@ -166,12 +273,12 @@ class M3U8Processor {
   }
 
   /**
-   * 处理M3U8内容 - 增强版
+   * 处理M3U8内容 - 增强版（支持TS检测）
    * @param {string} m3u8Content - 原始M3U8内容
    * @param {string} sourceUrl - 源URL
-   * @returns {object} 处理结果
+   * @returns {Promise<object>} 处理结果
    */
-  process(m3u8Content, sourceUrl) {
+  async process(m3u8Content, sourceUrl) {
     const startTime = Date.now();
     
     // 重置统计信息
@@ -223,7 +330,7 @@ class M3U8Processor {
       } else {
         // 处理文件路径/URL行
         this.stats.totalProcessed++;
-        const isAd = this.isAdvertisement(line);
+        const isAd = await this.isAdvertisement(line, currentDuration);
 
         if (isAd) {
           // 广告片段，记录并清空缓存的标签
@@ -291,7 +398,10 @@ class M3U8Processor {
    * @returns {object} 统计信息
    */
   getStats() {
-    return { ...this.stats };
+    return {
+      ...this.stats,
+      tsDetectorStats: this.tsDetector.getStats()
+    };
   }
 
   /**
@@ -302,8 +412,14 @@ class M3U8Processor {
       totalProcessed: 0,
       adsFiltered: 0,
       segmentsKept: 0,
-      processingTime: 0
+      processingTime: 0,
+      tsDetectionStats: {
+        totalAnalyzed: 0,
+        adsDetectedByTS: 0,
+        tsAnalysisTime: 0
+      }
     };
+    this.tsDetector.resetStats();
   }
 
   /**

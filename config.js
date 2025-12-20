@@ -51,7 +51,24 @@ module.exports = {
     logFilteredSegments: true,
     
     // 是否保留片段的原始顺序（移除广告后）
-    maintainOrder: true
+    maintainOrder: true,
+    
+    // TS内容检测配置（暂时禁用，避免误删正常内容）
+    enableTSDetection: false, // process.env.AD_FILTER_TS_DETECTION !== 'false',
+    tsDetection: {
+      // 并发检测数量限制
+      concurrencyLimit: parseInt(process.env.TS_DETECTION_CONCURRENCY_LIMIT) || 5,
+      // 检测超时时间（毫秒）
+      timeout: parseInt(process.env.TS_DETECTION_TIMEOUT) || 10000,
+      // 仅对可疑片段进行TS检测（强制启用，减少误判）
+      suspiciousOnly: true, // process.env.TS_DETECTION_SUSPICIOUS_ONLY !== 'false',
+      // 置信度阈值
+      confidenceThreshold: 0.9, // 提高到0.9，仅高置信度才判定为广告
+      // 是否启用缓存
+      enableCache: process.env.TS_DETECTION_CACHE !== 'false',
+      // 缓存大小限制
+      cacheSizeLimit: parseInt(process.env.TS_DETECTION_CACHE_LIMIT) || 1000
+    }
   },
   
   // 请求配置
