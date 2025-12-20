@@ -27,6 +27,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // 检查环境
     const environment = checkEnvironment();
     
+    // 初始化移动端侧边栏
+    initMobileSidebar();
+    
     // 根据环境调整初始化策略
     if (environment === 'userscript') {
         // 在用户脚本环境中，禁用某些功能或提供降级处理
@@ -37,6 +40,80 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeApp();
     }
 });
+
+// 初始化移动端侧边栏
+function initMobileSidebar() {
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebar = document.querySelector('.sidebar');
+    const main = document.querySelector('main');
+    
+    if (sidebarToggle && sidebar && main) {
+        sidebarToggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            
+            const isActive = sidebar.classList.contains('active');
+            const overlay = createSidebarOverlay();
+            
+            sidebar.classList.toggle('active');
+            main.classList.toggle('sidebar-open');
+            
+            if (!isActive) {
+                // 显示侧边栏
+                overlay.classList.add('active');
+                setTimeout(() => {
+                    document.addEventListener('click', closeSidebarOnClickOutside);
+                }, 100);
+            } else {
+                // 隐藏侧边栏
+                overlay.classList.remove('active');
+                document.removeEventListener('click', closeSidebarOnClickOutside);
+            }
+        });
+    }
+}
+
+// 点击外部区域关闭侧边栏
+function closeSidebarOnClickOutside(event) {
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    
+    if (sidebar && !sidebar.contains(event.target) && !sidebarToggle.contains(event.target)) {
+        sidebar.classList.remove('active');
+        document.querySelector('main').classList.remove('sidebar-open');
+        
+        // 移除覆盖层
+        const overlay = document.querySelector('.sidebar-overlay');
+        if (overlay) {
+            overlay.classList.remove('active');
+        }
+        
+        document.removeEventListener('click', closeSidebarOnClickOutside);
+    }
+}
+
+// 创建并管理覆盖层
+function createSidebarOverlay() {
+    let overlay = document.querySelector('.sidebar-overlay');
+    
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+        
+        overlay.addEventListener('click', function() {
+            const sidebar = document.querySelector('.sidebar');
+            const main = document.querySelector('main');
+            
+            sidebar.classList.remove('active');
+            main.classList.remove('sidebar-open');
+            overlay.classList.remove('active');
+            
+            document.removeEventListener('click', closeSidebarOnClickOutside);
+        });
+    }
+    
+    return overlay;
+}
 
 // 初始化应用
 function initializeApp() {

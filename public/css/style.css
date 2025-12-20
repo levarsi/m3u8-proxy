@@ -10,6 +10,26 @@
     --dark-color: #343a40;
 }
 
+/* 导航栏样式 */
+.navbar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1030;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 为固定导航栏添加主内容区域的顶部间距 */
+body {
+    padding-top: 56px; /* 导航栏高度 */
+}
+
+/* 确保侧边栏也从导航栏下方开始 */
+.sidebar {
+    top: 56px; /* 导航栏高度 */
+}
+
 /* 侧边栏样式 */
 .sidebar {
     position: fixed;
@@ -78,6 +98,7 @@
 /* 主内容区域样式 */
 main {
     margin-left: 0;
+    padding-top: 1rem;
     min-height: calc(100vh - 56px);
 }
 
@@ -222,24 +243,63 @@ main {
 }
 
 /* 响应式调整 */
-@media (max-width: 768px) {
+@media (max-width: 992px) {
+    /* 中等屏幕调整 */
     .sidebar {
-        position: static;
-        width: 100%;
-        height: auto;
-        padding: 0;
-        box-shadow: none;
-        border-bottom: 1px solid #dee2e6;
+        width: 200px;
+    }
+    
+    main {
+        margin-left: 200px;
+    }
+}
+
+@media (max-width: 768px) {
+    .navbar {
+        position: fixed !important;
+        padding: 0.5rem 1rem;
+    }
+    
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+    
+    .sidebar {
+        position: fixed;
+        top: 56px;
+        left: -240px; /* 隐藏在屏幕左侧 */
+        width: 240px;
+        height: calc(100vh - 56px);
+        background-color: #f8f9fa;
+        box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+        transition: left 0.3s ease;
+        z-index: 1020;
+    }
+    
+    .sidebar.active {
+        left: 0; /* 显示侧边栏 */
+    }
+    
+    /* 添加移动端菜单切换按钮 */
+    .navbar-toggler {
+        display: block !important;
     }
     
     .sidebar-sticky {
-        height: auto;
-        padding: 0.5rem 0;
+        height: 100%;
+        padding: 1rem 0;
+        overflow-y: auto;
     }
     
     main {
         margin-left: 0;
-        margin-top: 0;
+        width: 100%;
+        padding-top: 0.5rem;
+        transition: margin-left 0.3s ease;
+    }
+    
+    main.sidebar-open {
+        margin-left: 240px;
     }
     
     .d-md-block {
@@ -247,12 +307,54 @@ main {
     }
     
     .nav-link {
-        margin: 0.125rem 0.5rem;
-        padding: 0.5rem 1rem;
+        margin: 0.125rem 1rem;
+        padding: 0.75rem 1rem;
     }
     
     .nav-link.active::before {
         display: none;
+    }
+    
+    /* 移动端导航栏状态指示器调整 */
+    .navbar-text {
+        font-size: 0.8rem;
+    }
+    
+    /* 状态卡片在小屏幕下的调整 */
+    .col-xl-3, .col-md-6 {
+        margin-bottom: 1rem;
+    }
+    
+    /* 系统信息面板在小屏幕下的调整 */
+    .row > .col-lg-8, .row > .col-lg-4 {
+        margin-bottom: 1rem;
+    }
+}
+
+@media (max-width: 576px) {
+    /* 超小屏幕调整 */
+    .navbar-brand {
+        font-size: 1rem;
+    }
+    
+    .sidebar {
+        width: 280px;
+        left: -280px;
+    }
+    
+    main.sidebar-open {
+        margin-left: 280px;
+    }
+    
+    /* 状态卡片堆叠布局 */
+    .row {
+        flex-direction: column;
+    }
+    
+    .col-xl-3, .col-md-6 {
+        width: 100%;
+        max-width: 100%;
+        flex: 0 0 100%;
     }
 }
 
@@ -261,6 +363,19 @@ main {
     :root {
         --bs-body-bg: #1a1a1a;
         --bs-body-color: #e9ecef;
+    }
+    
+    .navbar {
+        background-color: #2d3748 !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .navbar-brand {
+        color: #e9ecef !important;
+    }
+    
+    .navbar-text {
+        color: #a0aec0 !important;
     }
     
     .sidebar {
@@ -433,6 +548,43 @@ main {
     background-color: rgba(255, 193, 7, 0.1);
 }
 
+/* 导航栏增强效果 */
+.navbar {
+    transition: all 0.3s ease;
+}
+
+.navbar-brand {
+    transition: color 0.3s ease;
+    font-weight: 600;
+}
+
+.navbar-brand:hover {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.navbar-text {
+    transition: all 0.3s ease;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.status-indicator.online {
+    background-color: rgba(40, 167, 69, 0.1);
+    color: var(--success-color);
+}
+
+.status-indicator.online:hover {
+    background-color: rgba(40, 167, 69, 0.2);
+}
+
 /* 性能图表样式 */
 .performance-chart {
     height: 200px;
@@ -466,6 +618,48 @@ main {
 @media (max-width: 768px) {
     .col-md-6 {
         margin-bottom: 1rem;
+    }
+}
+
+/* 移动端菜单按钮样式 */
+.navbar-toggler {
+    display: none;
+    border: none;
+    padding: 0.25rem 0.5rem;
+    background-color: transparent;
+    color: white;
+}
+
+.navbar-toggler:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.navbar-toggler:focus {
+    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25);
+}
+
+.navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+/* 移动端侧边栏覆盖层 */
+@media (max-width: 768px) {
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 56px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1010;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .sidebar-overlay.active {
+        display: block;
+        opacity: 1;
     }
 }
 
