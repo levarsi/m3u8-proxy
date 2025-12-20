@@ -1,0 +1,463 @@
+/* 自定义样式 */
+:root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --info-color: #17a2b8;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+}
+
+/* 侧边栏样式 */
+.sidebar {
+    position: fixed;
+    top: 56px;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    padding: 48px 0 0;
+    box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
+}
+
+.sidebar-sticky {
+    position: relative;
+    top: 0;
+    height: calc(100vh - 48px);
+    padding-top: .5rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* 导航链接样式 */
+.nav-link {
+    font-weight: 500;
+    color: #333;
+    padding: 0.75rem 1rem;
+    border-radius: 0.375rem;
+    margin: 0.125rem 0;
+    transition: all 0.3s ease;
+}
+
+.nav-link:hover {
+    color: var(--primary-color);
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.nav-link.active {
+    color: #fff;
+    background-color: var(--primary-color);
+}
+
+.nav-link i {
+    margin-right: 0.5rem;
+}
+
+/* 主内容区域样式 */
+main {
+    margin-left: 0;
+}
+
+@media (min-width: 768px) {
+    main {
+        margin-left: 240px;
+    }
+}
+
+/* 卡片边框样式 */
+.border-left-primary {
+    border-left: 0.25rem solid var(--primary-color) !important;
+}
+
+.border-left-success {
+    border-left: 0.25rem solid var(--success-color) !important;
+}
+
+.border-left-info {
+    border-left: 0.25rem solid var(--info-color) !important;
+}
+
+.border-left-warning {
+    border-left: 0.25rem solid var(--warning-color) !important;
+}
+
+/* 标签页内容样式 */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* 状态指示器 */
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.status-online {
+    background-color: rgba(40, 167, 69, 0.1);
+    color: var(--success-color);
+}
+
+.status-offline {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: var(--danger-color);
+}
+
+/* 日志容器样式 */
+.log-container {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    max-height: 500px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+}
+
+.log-entry {
+    margin-bottom: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.log-entry.info {
+    background-color: rgba(23, 162, 184, 0.1);
+    border-left: 3px solid var(--info-color);
+}
+
+.log-entry.warn {
+    background-color: rgba(255, 193, 7, 0.1);
+    border-left: 3px solid var(--warning-color);
+}
+
+.log-entry.error {
+    background-color: rgba(220, 53, 69, 0.1);
+    border-left: 3px solid var(--danger-color);
+}
+
+.log-entry.debug {
+    background-color: rgba(108, 117, 125, 0.1);
+    border-left: 3px solid var(--secondary-color);
+}
+
+/* 统计卡片样式 */
+.stats-card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.stats-card:hover {
+    transform: translateY(-2px);
+}
+
+/* 进度条样式 */
+.progress {
+    height: 0.5rem;
+}
+
+/* 按钮组样式 */
+.btn-group-sm > .btn, .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* 表格样式 */
+.table {
+    font-size: 0.875rem;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    background-color: #f8f9fa;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .sidebar {
+        position: static;
+        height: auto;
+        padding: 0;
+    }
+    
+    main {
+        margin-left: 0;
+    }
+    
+    .d-md-block {
+        display: none !important;
+    }
+}
+
+/* 深色主题支持 */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bs-body-bg: #1a1a1a;
+        --bs-body-color: #e9ecef;
+    }
+    
+    .sidebar {
+        background-color: #2d3748;
+    }
+    
+    .nav-link {
+        color: #e9ecef;
+    }
+    
+    .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .card {
+        background-color: #2d3748;
+        border-color: #4a5568;
+    }
+    
+    .log-container {
+        background-color: #2d3748;
+        border-color: #4a5568;
+        color: #e9ecef;
+    }
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes slideIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.slide-in {
+    animation: slideIn 0.3s ease-out;
+}
+
+/* 加载动画 */
+.loading-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 工具提示样式 */
+.tooltip {
+    font-size: 0.875rem;
+}
+
+/* 表单样式增强 */
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* 徽章样式 */
+.badge {
+    font-size: 0.75rem;
+}
+
+/* 自定义滚动条 */
+.log-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.log-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.log-container::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.log-container::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 视频播放器样式 */
+#video-player {
+    background-color: #000;
+    border-radius: 0.375rem;
+}
+
+/* 播放器控制面板 */
+.player-controls {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 0.375rem;
+    padding: 1rem;
+    color: #fff;
+}
+
+/* 缓存项样式 */
+.cache-item {
+    border-left: 3px solid var(--info-color);
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 0.375rem;
+    transition: all 0.2s ease;
+}
+
+.cache-item:hover {
+    background-color: #e9ecef;
+    transform: translateX(2px);
+}
+
+/* 测试结果样式 */
+.test-result {
+    border-left: 4px solid var(--success-color);
+    background-color: rgba(40, 167, 69, 0.1);
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin-top: 1rem;
+}
+
+.test-result.error {
+    border-left-color: var(--danger-color);
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.test-result.warning {
+    border-left-color: var(--warning-color);
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+/* 性能图表样式 */
+.performance-chart {
+    height: 200px;
+    background-color: #f8f9fa;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* 设置面板样式 */
+.settings-panel {
+    background-color: #fff;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.settings-panel .form-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+/* 响应式网格调整 */
+@media (max-width: 992px) {
+    .col-lg-6 {
+        margin-bottom: 1rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .col-md-6 {
+        margin-bottom: 1rem;
+    }
+}
+
+/* 状态指示灯 */
+.status-light {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.status-light.online {
+    background-color: var(--success-color);
+    box-shadow: 0 0 5px var(--success-color);
+}
+
+.status-light.offline {
+    background-color: var(--danger-color);
+    box-shadow: 0 0 5px var(--danger-color);
+}
+
+.status-light.warning {
+    background-color: var(--warning-color);
+    box-shadow: 0 0 5px var(--warning-color);
+}
+
+/* 数据表格样式 */
+.data-table {
+    font-size: 0.875rem;
+}
+
+.data-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.data-table td {
+    vertical-align: middle;
+}
+
+/* 操作按钮组 */
+.action-buttons {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.action-buttons .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+/* 模态框样式增强 */
+.modal-header {
+    background-color: var(--primary-color);
+    color: #fff;
+}
+
+.modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+/* 进度指示器 */
+.progress-indicator {
+    width: 100%;
+    height: 4px;
+    background-color: #e9ecef;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-indicator .progress-bar {
+    height: 100%;
+    background-color: var(--primary-color);
+    transition: width 0.3s ease;
+}

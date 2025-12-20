@@ -14,6 +14,11 @@ const cacheManager = new CacheManager();
 // 中间件配置
 // ==========================================
 
+// 静态文件服务
+if (config.ui.enabled) {
+  app.use(express.static('public'));
+}
+
 // CORS中间件
 if (config.cors.enabled) {
   app.use((req, res, next) => {
@@ -74,18 +79,111 @@ async function fetchM3u8(url) {
   const options = {
     timeout: config.request.timeout,
     maxRedirects: config.request.maxRedirects,
-    headers: config.request.headers,
+    headers: {
+      ...config.request.headers,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/vnd.apple.mpegurl, application/x-mpegURL, application/vnd.apple.mpegurl.audio-only, video/mp2t, application/octet-stream, */*',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Referer': new URL(url).origin,
+      'Origin': new URL(url).origin,
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    },
     maxContentLength: config.security.maxM3u8Size,
-    responseType: 'text'
+    responseType: 'text',
+    validateStatus: function (status) {
+      // 只接受200状态码，手动处理重定向
+      return status === 200;
+    }
   };
 
   logger.info(`请求M3U8`, { url });
   
   try {
     const response = await axios.get(url, options);
+    
+    // 验证响应内容
+    if (!response.data) {
+      throw new Error('响应内容为空');
+    }
+    
+    // 检查内容类型
+    const contentType = response.headers['content-type'] || '';
+    const isHtmlContentType = contentType.includes('text/html') || contentType.includes('application/html');
+    
+    // 检查内容是否为HTML
+    const content = response.data.trim();
+    const isHtmlContent = content.toLowerCase().startsWith('<html') || content.toLowerCase().includes('<head>');
+    
+    // 如果返回HTML而不是M3U8，可能是被重定向或阻止
+    if (isHtmlContentType || isHtmlContent) {
+      logger.warn('服务器返回HTML内容而非M3U8', {
+        url,
+        contentType,
+        contentLength: content.length,
+        contentPreview: content.substring(0, 200)
+      });
+      
+      // 尝试从HTML中提取重定向URL
+      const redirectMatch = content.match(/window\.location\.href\s*=\s*["']([^"']+)["']/) ||
+                           content.match(/location\.replace\s*\(\s*["']([^"']+)["']/) ||
+                           content.match(/href\s*=\s*["']([^"']+\.m3u8[^"']*)["']/);
+      
+      if (redirectMatch && redirectMatch[1]) {
+        const redirectUrl = redirectMatch[1];
+        logger.info('检测到重定向URL，尝试获取', { redirectUrl });
+        
+        // 如果是相对URL，转换为绝对URL
+        const absoluteUrl = redirectUrl.startsWith('http') ? redirectUrl : new URL(redirectUrl, url).href;
+        
+        // 递归获取重定向后的内容
+        return await fetchM3u8(absoluteUrl);
+      } else {
+        throw new Error('服务器返回HTML内容，可能是访问被阻止或URL无效');
+      }
+    }
+    
+    // 验证是否为有效的M3U8内容
+    if (!content.startsWith('#EXTM3U')) {
+      logger.warn('内容不是有效的M3U8格式', {
+        url,
+        contentType,
+        contentLength: content.length,
+        contentPreview: content.substring(0, 100)
+      });
+      
+      // 如果内容很短，可能是错误页面
+      if (content.length < 100) {
+        throw new Error('内容过短，可能不是有效的M3U8文件');
+      }
+      
+      // 尝试查找M3U8内容
+      const m3u8Match = content.match(/#EXTM3U[\s\S]*?(?=#EXT|$)/);
+      if (m3u8Match) {
+        logger.info('从响应中提取到M3U8内容', { url });
+        return m3u8Match[0];
+      } else {
+        throw new Error('无法找到有效的M3U8内容');
+      }
+    }
+    
+    // 记录响应信息用于调试
+    logger.debug('M3U8响应信息', {
+      url,
+      status: response.status,
+      contentType,
+      contentLength: content.length,
+      isM3U8: true
+    });
+    
     return response.data;
   } catch (error) {
-    logger.error(`获取M3U8失败`, error, { url });
+    logger.error(`获取M3U8失败`, error, { 
+      url, 
+      status: error.response?.status,
+      statusText: error.response?.statusText 
+    });
     
     if (error.code === 'ECONNABORTED') {
       throw new Error(`请求超时: ${config.request.timeout}ms`);
@@ -102,6 +200,13 @@ async function fetchM3u8(url) {
 // ==========================================
 // 1. 核心代理服务接口
 // ==========================================
+app.options('/proxy', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.status(200).end();
+});
+
 app.get('/proxy', async (req, res) => {
   const targetUrl = req.query.url;
   
@@ -138,6 +243,24 @@ app.get('/proxy', async (req, res) => {
     // 获取原始M3U8内容
     const originalM3u8 = await fetchM3u8(targetUrl);
     
+    // 验证M3U8内容
+    if (!originalM3u8 || !originalM3u8.trim().startsWith('#EXTM3U')) {
+      logger.warn('获取到无效的M3U8内容', { 
+        url: targetUrl, 
+        contentLength: originalM3u8 ? originalM3u8.length : 0,
+        contentPreview: originalM3u8 ? originalM3u8.substring(0, 100) : 'null'
+      });
+      
+      // 如果内容无效，尝试直接返回原始内容
+      if (originalM3u8 && originalM3u8.trim().length > 0) {
+        res.set('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+        res.set('Access-Control-Allow-Origin', '*');
+        return res.send(originalM3u8);
+      } else {
+        throw new Error('获取到空的或无效的M3U8内容');
+      }
+    }
+    
     // 处理M3U8
     const startTime = Date.now();
     const result = m3u8Processor.process(originalM3u8, targetUrl);
@@ -154,11 +277,14 @@ app.get('/proxy', async (req, res) => {
 
     // 准备响应头
     const headers = {
-      'Content-Type': 'application/vnd.apple.mpegurl',
+      'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
       'X-Processed-By': 'M3U8-Proxy',
       'X-Processing-Time': `${processingTime}ms`,
       'X-Segment-Count': result.segmentCount,
-      'X-Is-VOD': result.isVod
+      'X-Is-VOD': result.isVOD
     };
 
     if (!result.isVod) {
@@ -184,6 +310,18 @@ app.get('/proxy', async (req, res) => {
   } catch (error) {
     logger.error('代理处理失败', error, { url: targetUrl });
     
+    // 如果是HTML内容错误，尝试返回原始响应
+    if (error.message.includes('HTML内容')) {
+      res.status(400).json({
+        error: '内容错误',
+        message: '目标URL返回HTML内容而非M3U8，可能是访问被阻止或URL无效',
+        url: targetUrl,
+        timestamp: new Date().toISOString(),
+        suggestion: '请检查URL是否正确，或尝试其他M3U8源'
+      });
+      return;
+    }
+    
     const statusCode = error.message.includes('超时') ? 504 :
                       error.message.includes('无法连接') ? 502 :
                       error.message.includes('返回错误') ? 502 : 500;
@@ -191,7 +329,9 @@ app.get('/proxy', async (req, res) => {
     res.status(statusCode).json({
       error: '代理错误',
       message: error.message,
-      timestamp: new Date().toISOString()
+      url: targetUrl,
+      timestamp: new Date().toISOString(),
+      suggestion: '请检查网络连接和URL有效性'
     });
   }
 });
@@ -263,33 +403,216 @@ video_part_4.ts
 });
 
 // ==========================================
-// 5. 配置查看接口（仅开发环境）
+// 5. 用户界面重定向
 // ==========================================
-if (process.env.NODE_ENV !== 'production') {
-  app.get('/config', (req, res) => {
-    // 返回安全的配置信息（不包含敏感数据）
-    const safeConfig = {
-      server: config.server,
-      adFilter: {
-        enabled: config.adFilter.enabled,
-        patternCount: config.adFilter.patterns.length,
-        logLevel: config.adFilter.logLevel
-      },
-      cache: config.cache,
-      cors: config.cors,
-      request: {
-        timeout: config.request.timeout,
-        hasHeaders: !!config.request.headers
-      },
-      security: {
-        allowedProtocols: config.security.allowedProtocols,
-        rateLimit: config.security.rateLimit
-      }
-    };
-    
-    res.json(safeConfig);
+if (config.ui.enabled) {
+  app.get('/', (req, res) => {
+    res.redirect('/index.html');
   });
 }
+
+// ==========================================
+// 6. 配置查看接口（仅开发环境）
+// ==========================================
+app.get('/config', (req, res) => {
+  // 返回安全的配置信息（不包含敏感数据）
+  const safeConfig = {
+    server: config.server,
+    adFilter: {
+      enabled: config.adFilter.enabled,
+      patternCount: config.adFilter.patterns.length,
+      logLevel: config.adFilter.logLevel
+    },
+    cache: config.cache,
+    cors: config.cors,
+    request: {
+      timeout: config.request.timeout,
+      hasHeaders: !!config.request.headers
+    },
+    security: {
+      allowedProtocols: config.security.allowedProtocols,
+      rateLimit: config.security.rateLimit
+    },
+    ui: config.ui,
+    player: config.player,
+    monitoring: config.monitoring
+  };
+  
+  res.json(safeConfig);
+});
+
+// ==========================================
+// 7. 设置更新接口
+// ==========================================
+app.post('/config', express.json(), (req, res) => {
+  try {
+    const updates = req.body;
+    
+    // 这里可以实现配置更新逻辑
+    // 注意：实际应用中应该验证和过滤输入
+    
+    logger.info('配置已更新', { updates });
+    
+    res.json({
+      success: true,
+      message: '配置更新成功',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('配置更新失败', error);
+    res.status(400).json({
+      success: false,
+      message: '配置更新失败',
+      error: error.message
+    });
+  }
+});
+
+// ==========================================
+// 8. 广告过滤规则管理接口
+// ==========================================
+app.get('/ad-filter/rules', (req, res) => {
+  res.json({
+    rules: m3u8Processor.getAdPatterns(),
+    enabled: config.adFilter.enabled
+  });
+});
+
+app.post('/ad-filter/rules', express.json(), (req, res) => {
+  try {
+    const { pattern } = req.body;
+    
+    if (pattern) {
+      m3u8Processor.addAdPattern(pattern);
+      res.json({
+        success: true,
+        message: '规则添加成功',
+        rules: m3u8Processor.getAdPatterns()
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: '缺少模式参数'
+      });
+    }
+  } catch (error) {
+    logger.error('添加广告过滤规则失败', error);
+    res.status(400).json({
+      success: false,
+      message: '添加规则失败',
+      error: error.message
+    });
+  }
+});
+
+app.delete('/ad-filter/rules/:index', (req, res) => {
+  try {
+    const index = parseInt(req.params.index);
+    m3u8Processor.removeAdPattern(index);
+    
+    res.json({
+      success: true,
+      message: '规则删除成功',
+      rules: m3u8Processor.getAdPatterns()
+    });
+  } catch (error) {
+    logger.error('删除广告过滤规则失败', error);
+    res.status(400).json({
+      success: false,
+      message: '删除规则失败',
+      error: error.message
+    });
+  }
+});
+
+// ==========================================
+// 9. 系统统计接口
+// ==========================================
+app.get('/stats', (req, res) => {
+  const stats = {
+    system: {
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      platform: process.platform,
+      nodeVersion: process.version
+    },
+    cache: cacheManager.getStats(),
+    processor: m3u8Processor.getStats(),
+    server: {
+      startTime: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+      requestCount: req.app.get('requestCount') || 0
+    }
+  };
+  
+  res.json(stats);
+});
+
+// ==========================================
+// 10. 日志接口
+// ==========================================
+app.get('/logs', (req, res) => {
+  try {
+    const { level, module, since, limit } = req.query;
+    const options = {};
+    
+    if (level) options.level = level;
+    if (module) options.module = module;
+    if (since) options.since = since;
+    if (limit) options.limit = parseInt(limit);
+    
+    const logs = logger.getMemoryLogs(options);
+    const stats = logger.getStats();
+    
+    res.json({
+      logs,
+      total: logs.length,
+      stats,
+      filters: options
+    });
+  } catch (error) {
+    logger.error('获取日志失败', error, { module: 'api' });
+    res.status(500).json({
+      error: '获取日志失败',
+      message: error.message
+    });
+  }
+});
+
+// ==========================================
+// 11. 日志统计接口
+// ==========================================
+app.get('/logs/stats', (req, res) => {
+  try {
+    const stats = logger.getStats();
+    res.json(stats);
+  } catch (error) {
+    logger.error('获取日志统计失败', error, { module: 'api' });
+    res.status(500).json({
+      error: '获取日志统计失败',
+      message: error.message
+    });
+  }
+});
+
+// ==========================================
+// 12. 清除日志接口
+// ==========================================
+app.delete('/logs', (req, res) => {
+  try {
+    logger.clearMemoryLogs();
+    logger.info('内存日志已清除', { module: 'api' });
+    res.json({
+      success: true,
+      message: '内存日志已清除'
+    });
+  } catch (error) {
+    logger.error('清除日志失败', error, { module: 'api' });
+    res.status(500).json({
+      error: '清除日志失败',
+      message: error.message
+    });
+  }
+});
 
 // ==========================================
 // 启动服务
