@@ -737,3 +737,219 @@ main {
     background-color: var(--primary-color);
     transition: width 0.3s ease;
 }
+
+/* 广告过滤页面样式 */
+.ad-filter-stats-card {
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
+}
+
+.ad-filter-stats-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+/* 广告过滤日志样式增强 */
+#ad-filter-logs .log-entry {
+    border-left-width: 4px;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    font-size: 0.875rem;
+}
+
+#ad-filter-logs .log-entry:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+    transform: translateX(2px);
+}
+
+/* 过滤规则状态样式 */
+.filter-rule-item {
+    border-left: 3px solid var(--primary-color);
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 0.375rem;
+    transition: all 0.2s ease;
+}
+
+.filter-rule-item:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    transform: translateX(2px);
+}
+
+.filter-rule-item.inactive {
+    border-left-color: var(--secondary-color);
+    opacity: 0.7;
+}
+
+.filter-rule-item.error {
+    border-left-color: var(--danger-color);
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+}
+
+/* TS检测统计样式 */
+.ts-stat-item {
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+    border: 1px solid #b8daff;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.ts-stat-item:hover {
+    background: linear-gradient(135deg, #bee5eb 0%, #abdde5 100%);
+    transform: translateY(-2px);
+}
+
+/* 广告过滤统计特殊效果 */
+#ad-filter .stats-card {
+    position: relative;
+    overflow: hidden;
+}
+
+#ad-filter .stats-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.5s ease;
+}
+
+#ad-filter .stats-card:hover::before {
+    left: 100%;
+}
+
+/* 图表样式增强 */
+.chart-legend {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.chart-legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+/* 过滤效率指示器 */
+.efficiency-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.efficiency-indicator.high {
+    background-color: rgba(40, 167, 69, 0.1);
+    color: var(--success-color);
+}
+
+.efficiency-indicator.medium {
+    background-color: rgba(255, 193, 7, 0.1);
+    color: var(--warning-color);
+}
+
+.efficiency-indicator.low {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: var(--danger-color);
+}
+
+/* 实时日志滚动条样式 */
+#ad-filter-logs::-webkit-scrollbar {
+    width: 8px;
+}
+
+#ad-filter-logs::-webkit-scrollbar-track {
+    background: #f1f3f4;
+    border-radius: 4px;
+}
+
+#ad-filter-logs::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+#ad-filter-logs::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .chart-container {
+        height: 200px;
+    }
+    
+    #ad-filter .stats-card {
+        margin-bottom: 1rem;
+    }
+    
+    .chart-legend {
+        gap: 0.5rem;
+    }
+    
+    .filter-rule-item,
+    .ts-stat-item {
+        padding: 0.75rem;
+    }
+}
+
+/* 暗色主题适配 */
+@media (prefers-color-scheme: dark) {
+    .filter-rule-item {
+        background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+        border-color: var(--primary-color);
+    }
+    
+    .filter-rule-item:hover {
+        background: linear-gradient(135deg, #4a5568 0%, #718096 100%);
+    }
+    
+    .filter-rule-item.error {
+        background: linear-gradient(135deg, #742a2a 0%, #9b2c2c 100%);
+        border-color: var(--danger-color);
+    }
+    
+    .ts-stat-item {
+        background: linear-gradient(135deg, #2c5282 0%, #2b6cb0 100%);
+        border-color: #3182ce;
+    }
+    
+    .ts-stat-item:hover {
+        background: linear-gradient(135deg, #2b6cb0 0%, #3182ce 100%);
+    }
+    
+    #ad-filter-logs::-webkit-scrollbar-track {
+        background: #4a5568;
+    }
+    
+    #ad-filter-logs::-webkit-scrollbar-thumb {
+        background: #718096;
+    }
+    
+    #ad-filter-logs::-webkit-scrollbar-thumb:hover {
+        background: #a0aec0;
+    }
+}

@@ -59,6 +59,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="#ad-filter" data-tab="ad-filter">
+                                <i class="bi bi-shield-check"></i> 广告过滤
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="#logs" data-tab="logs">
                                 <i class="bi bi-file-text"></i> 日志
                             </a>
@@ -471,6 +476,195 @@
                     </div>
                 </div>
 
+                <!-- 广告过滤 -->
+                <div id="ad-filter" class="tab-content">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">广告过滤统计</h1>
+                        <div>
+                            <button class="btn btn-success" onclick="exportAdFilterStats()">
+                                <i class="bi bi-download"></i> 导出统计
+                            </button>
+                            <button class="btn btn-primary ms-2" onclick="refreshAdFilterStats()">
+                                <i class="bi bi-arrow-clockwise"></i> 刷新
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 统计概览 -->
+                    <div class="row mb-4">
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card border-left-danger shadow h-100 py-2 stats-card">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                                总过滤广告
+                                            </div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-ads-filtered">
+                                                0
+                                            </div>
+                                            <small class="text-muted" id="ads-filtered-rate">0%</small>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="bi bi-shield-fill fa-2x text-danger"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card border-left-warning shadow h-100 py-2 stats-card">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                                总处理片段
+                                            </div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-segments">
+                                                0
+                                            </div>
+                                            <small class="text-muted">所有TS片段</small>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="bi bi-film fa-2x text-warning"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card border-left-info shadow h-100 py-2 stats-card">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                                过滤准确率
+                                            </div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="filter-accuracy">
+                                                0%
+                                            </div>
+                                            <small class="text-muted">基于TS检测</small>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="bi bi-graph-up-arrow fa-2x text-info"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card border-left-success shadow h-100 py-2 stats-card">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                                过滤效率
+                                            </div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="filter-efficiency">
+                                                0ms
+                                            </div>
+                                            <small class="text-muted">平均处理时间</small>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="bi bi-lightning fa-2x text-success"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 详细统计图表 -->
+                    <div class="row mb-4">
+                        <div class="col-lg-8">
+                            <div class="card shadow mb-4">
+                                <div class="card-header py-3">
+                                    <h6 class="m-0 font-weight-bold text-primary">过滤效果趋势图</h6>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="ad-filter-chart" width="400" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4">
+                            <div class="card shadow mb-4">
+                                <div class="card-header py-3">
+                                    <h6 class="m-0 font-weight-bold text-primary">过滤方法分布</h6>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="filter-methods-chart" width="400" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 过滤规则状态 -->
+                    <div class="row mb-4">
+                        <div class="col-lg-6">
+                            <div class="card shadow mb-4">
+                                <div class="card-header py-3">
+                                    <h6 class="m-0 font-weight-bold text-primary">过滤规则生效状态</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="filter-rules-status">
+                                        <div class="text-center">
+                                            <div class="spinner-border" role="status">
+                                                <span class="visually-hidden">加载中...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-6">
+                            <div class="card shadow mb-4">
+                                <div class="card-header py-3">
+                                    <h6 class="m-0 font-weight-bold text-primary">TS检测统计</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="ts-detection-stats">
+                                        <div class="text-center">
+                                            <div class="spinner-border" role="status">
+                                                <span class="visually-hidden">加载中...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 实时过滤日志 -->
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="m-0 font-weight-bold text-primary">实时过滤日志</h6>
+                            <div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="checkbox" id="auto-scroll-logs" checked>
+                                    <label class="form-check-label" for="auto-scroll-logs">自动滚动</label>
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="clearAdFilterLogs()">
+                                    <i class="bi bi-trash"></i> 清除
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="ad-filter-logs" class="log-container" style="max-height: 400px; overflow-y: auto;">
+                                <div class="text-center">
+                                    <div class="spinner-border" role="status">
+                                        <span class="visually-hidden">加载中...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 日志 -->
                 <div id="logs" class="tab-content">
                     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
@@ -506,6 +700,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="./js/app.js"></script>
 </body>
 </html>

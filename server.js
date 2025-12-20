@@ -388,6 +388,7 @@ app.get('/stats', (req, res) => {
     },
     cache: cacheManager.getStats(),
     processor: {
+      enabled: m3u8Processor.isAdFilterEnabled || false,
       stats: m3u8Processor.getStats ? m3u8Processor.getStats() : {
         processedCount: 0,
         adsFiltered: 0,
