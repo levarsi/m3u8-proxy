@@ -271,16 +271,46 @@ async function refreshDashboard() {
         
         const data = await response.json();
         
+        // 获取额外的系统统计信息
+        const statsResponse = await fetch(`${baseUrl}/stats`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
+            }
+        });
+        
+        let statsData = {};
+        if (statsResponse.ok) {
+            statsData = await statsResponse.json();
+        }
+        
         // 更新系统状态
         document.getElementById('system-status').textContent = data.status;
         document.getElementById('uptime').textContent = formatUptime(data.uptime);
-        document.getElementById('memory-usage').textContent = formatMemory(data.memory);
+        
+        // 修复内存使用显示
+        if (data.memory && typeof data.memory === 'object') {
+            document.getElementById('memory-usage').textContent = formatMemory(data.memory);
+        } else if (statsData.system && statsData.system.memory) {
+            document.getElementById('memory-usage').textContent = formatMemory(statsData.system.memory);
+        } else {
+            document.getElementById('memory-usage').textContent = '未知';
+        }
+        
         document.getElementById('server-url').textContent = baseUrl;
-        document.getElementById('node-version').textContent = data.nodeVersion || 'Unknown';
+        
+        // 修复Node.js版本显示
+        const nodeVersion = statsData.system?.nodeVersion || 
+                           data.nodeVersion || 
+                           (typeof process !== 'undefined' ? process.version : null) || 
+                           'Unknown';
+        document.getElementById('node-version').textContent = nodeVersion;
+        
         document.getElementById('start-time').textContent = new Date(data.timestamp).toLocaleString();
         
         // 更新统计卡片
-        updateStatsCards(data);
+        updateStatsCards(data, statsData);
         
     } catch (error) {
         console.error('刷新仪表板失败:', error);
@@ -291,9 +321,9 @@ async function refreshDashboard() {
 }
 
 // 更新统计卡片
-function updateStatsCards(data) {
+function updateStatsCards(healthData, statsData) {
     // 缓存命中率
-    const cacheStats = data.cache || {};
+    const cacheStats = healthData.cache || statsData.cache || {};
     const hitRate = cacheStats.stats && cacheStats.stats.hitRate 
         ? cacheStats.stats.hitRate 
         : '0%';
@@ -302,11 +332,14 @@ function updateStatsCards(data) {
     // 总请求数
     const totalRequests = cacheStats.stats && cacheStats.stats.totalRequests 
         ? cacheStats.stats.totalRequests 
-        : 0;
+        : (statsData.server?.requestCount || 0);
     document.getElementById('total-requests').textContent = totalRequests;
     
-    // 广告过滤数（这里需要从其他地方获取）
-    document.getElementById('ads-filtered').textContent = '0';
+    // 广告过滤数
+    const adsFiltered = statsData.processor?.stats?.adsFiltered || 
+                       cacheStats.stats?.adsFiltered || 
+                       0;
+    document.getElementById('ads-filtered').textContent = adsFiltered;
 }
 
 // 仪表板降级处理
@@ -1017,11 +1050,40 @@ function formatUptime(seconds) {
     }
 }
 
-function formatMemory(bytes) {
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    if (bytes === 0) return '0 Bytes';
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+// 格式化内存使用
+function formatMemory(memory) {
+    if (!memory) return '未知';
+    
+    // 处理不同的内存数据格式
+    let used = 0;
+    let total = 0;
+    
+    if (typeof memory === 'object') {
+        // Node.js process.memoryUsage() 格式
+        used = memory.heapUsed || memory.rss || memory.used || 0;
+        total = memory.heapTotal || memory.total || 0;
+        
+        // 如果没有total，使用RSS作为总内存
+        if (!total && memory.rss) {
+            total = memory.rss;
+        }
+    } else if (typeof memory === 'number') {
+        // 如果是数字，假设是已使用内存
+        used = memory;
+        total = memory; // 暂时设为相同值
+    }
+    
+    // 如果仍然没有有效数据，返回默认值
+    if (used === 0 && total === 0) {
+        return '0 MB / 0 MB';
+    }
+    
+    // 如果total为0，只显示used
+    if (total === 0) {
+        return formatBytes(used);
+    }
+    
+    return `${formatBytes(used)} / ${formatBytes(total)}`;
 }
 
 function formatDuration(milliseconds) {

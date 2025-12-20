@@ -10,9 +10,19 @@ const app = express();
 const m3u8Processor = new M3U8Processor();
 const cacheManager = new CacheManager();
 
+// 全局变量
+global.requestCount = 0;
+global.startTime = new Date().toISOString();
+
 // ==========================================
 // 中间件配置
 // ==========================================
+
+// 请求计数中间件
+app.use((req, res, next) => {
+  global.requestCount++;
+  next();
+});
 
 // 静态文件服务
 if (config.ui.enabled) {
@@ -355,6 +365,42 @@ app.get('/health', (req, res) => {
   
   logger.debug('健康检查请求');
   res.json(health);
+});
+
+// ==========================================
+// 系统统计信息接口
+// ==========================================
+app.get('/stats', (req, res) => {
+  const stats = {
+    system: {
+      nodeVersion: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      memory: process.memoryUsage(),
+      cpuUsage: process.cpuUsage(),
+      uptime: process.uptime(),
+      pid: process.pid
+    },
+    server: {
+      requestCount: global.requestCount || 0,
+      startTime: global.startTime || new Date().toISOString(),
+      version: '2.0.0'
+    },
+    cache: cacheManager.getStats(),
+    processor: {
+      stats: m3u8Processor.getStats ? m3u8Processor.getStats() : {
+        processedCount: 0,
+        adsFiltered: 0,
+        processingTime: 0
+      }
+    },
+    logger: logger.getStats ? logger.getStats() : {
+      totalLogs: 0,
+      errorCount: 0
+    }
+  };
+  
+  res.json(stats);
 });
 
 // ==========================================
