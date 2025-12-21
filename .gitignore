@@ -1,2 +1,4 @@
 /node_modules
 /.iflow
+/frontend/node_modules
+/.trae
