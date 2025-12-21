@@ -293,27 +293,43 @@ node test-real-scenario.js
 
 ```
 m3u8-proxy-demo/
-├── server.js                          # 主服务器文件
+├── 配置文件/
 ├── package.json                       # 项目配置和依赖
 ├── package-lock.json                  # 依赖锁定文件
 ├── .gitignore                         # Git 忽略文件配置
-│
-├── 核心模块/
 ├── config.js                          # 应用配置文件
+│
+├── 核心服务模块/
+├── server.js                          # 主服务器文件
 ├── m3u8-processor.js                  # M3U8 播放列表处理器
 ├── cache-manager.js                   # 缓存系统管理器
 ├── logger.js                          # 日志管理系统
 ├── ts-metadata-detector.js            # TS 元数据检测器
 │
-├── 测试文件/
-├── test-ts-detection.js               # TS 检测功能测试
-├── test-integration.js                # 系统集成测试
-├── test-real-scenario.js              # 真实场景模拟测试
-├── test-fix.js                        # 修复验证测试
+├── 工具脚本/
+├── start-with-ts-detection.js         # 带 TS 检测的启动脚本
 ├── debug-real-m3u8.js                 # 真实 M3U8 调试工具
 ├── check-filtered.js                  # 过滤效果检查工具
-├── start-with-ts-detection.js         # 带 TS 检测的启动脚本
 ├── emergency-fix.js                   # 紧急修复脚本
+│
+├── 测试模块/
+├── test/                              # 测试目录
+│   ├── test-ts-detection.js           # TS 检测功能测试
+│   ├── test-integration.js            # 系统集成测试
+│   ├── test-real-scenario.js          # 真实场景模拟测试
+│   └── test-fix.js                    # 修复验证测试
+│
+├── 文档/
+├── README.md                          # 项目说明文档
+├── API.md                             # API 接口文档
+├── CHANGELOG.md                       # 版本更新日志
+├── IFLOW.md                           # 工作流程文档
+├── docs/                              # 详细文档目录
+│   ├── AD-FILTER-UI-IMPLEMENTATION.md # 广告过滤UI实现文档
+│   ├── IMPLEMENTATION-SUMMARY.md      # 实现总结
+│   ├── PROJECT-STATUS.md              # 项目状态文档
+│   ├── TS-AD-FILTER-TECHNICAL-PLAN.md # TS广告过滤技术方案
+│   └── TS-DETECTION-GUIDE.md          # TS检测指南
 │
 ├── 前端应用/
 ├── frontend/                          # React + TypeScript 前端
@@ -350,6 +366,15 @@ m3u8-proxy-demo/
 │           ├── LogsPage.tsx           # 日志查看页面
 │           ├── PlayerPage.tsx         # 播放器页面
 │           └── SettingsPage.tsx       # 设置页面
+│
+├── 静态资源/
+├── public/                            # 静态资源目录
+│   ├── index.html                     # 生产环境入口HTML
+│   └── assets/                        # 构建资源
+│       ├── index-B2GgB45Z.css         # 样式文件
+│       └── index-lgE7_ScT.js          # JavaScript文件
+│
+└──
 
 ```
 
