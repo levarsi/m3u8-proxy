@@ -1056,6 +1056,59 @@ class M3U8Processor {
       modelWeights: stats.tsDetectorStats.learningStats.modelWeights
     };
   }
-}
+  
+  /**
+   * 获取神经网络模型信息
+   * @returns {object} 神经网络模型信息
+   */
+  getNNModelInfo() {
+    if (!this.nnModel) {
+      return null;
+    }
+    return this.nnModel.getModelInfo();
+  }
+  
+  /**
+   * 启动神经网络模型训练
+   * @param {Array} trainingData - 训练数据
+   * @returns {Promise<Object>} 训练结果
+   */
+  async trainNNModel(trainingData) {
+    if (!this.nnModel) {
+      throw new Error('神经网络模型未初始化');
+    }
+    return await this.nnModel.train(trainingData);
+  }
+  
+  /**
+   * 重置神经网络模型
+   */
+  resetNNModel() {
+    if (this.nnModel) {
+      this.nnModel.reset();
+    }
+  }
+  
+  /**
+   * 获取神经网络模型权重
+   * @returns {Array} 模型权重
+   */
+  getNNModelWeights() {
+    if (!this.nnModel) {
+      return null;
+    }
+    return this.nnModel.getWeights();
+  }
+  
+  /**
+   * 设置神经网络模型权重
+   * @param {Array} weights - 权重数组
+   */
+  setNNModelWeights(weights) {
+    if (this.nnModel) {
+      this.nnModel.setWeights(weights);
+    }
+  }
+};
 
 module.exports = M3U8Processor;

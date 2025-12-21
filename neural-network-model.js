@@ -35,6 +35,23 @@ class NeuralNetworkModel {
       modelSize: 0
     };
     
+    // 训练状态管理
+    this.trainingStatus = {
+      isTraining: false,
+      currentEpoch: 0,
+      totalEpochs: 0,
+      loss: 0,
+      accuracy: 0,
+      valLoss: 0,
+      valAccuracy: 0,
+      startTime: null,
+      endTime: null,
+      status: 'idle' // idle, training, completed, failed
+    };
+    
+    // 训练历史记录
+    this.trainingHistory = [];
+    
     // 初始化模型
     this.init();
   }
@@ -215,6 +232,20 @@ class NeuralNetworkModel {
     const startTime = Date.now();
     this.stats.totalTrainingSessions++;
     
+    // 初始化训练状态
+    this.trainingStatus = {
+      isTraining: true,
+      currentEpoch: 0,
+      totalEpochs: this.trainConfig.epochs,
+      loss: 0,
+      accuracy: 0,
+      valLoss: 0,
+      valAccuracy: 0,
+      startTime: startTime,
+      endTime: null,
+      status: 'training' // idle, training, completed, failed
+    };
+    
     try {
       // 准备训练数据
       const { features, labels } = this.prepareTrainingData(trainingData);
@@ -232,6 +263,27 @@ class NeuralNetworkModel {
           saveBestOnly: true,
           saveWeightsOnly: false
         }),
+        {
+          onEpochEnd: (epoch, logs) => {
+            // 更新训练状态
+            this.trainingStatus = {
+              ...this.trainingStatus,
+              currentEpoch: epoch + 1,
+              loss: logs.loss || 0,
+              accuracy: logs.accuracy || 0,
+              valLoss: logs.val_loss || 0,
+              valAccuracy: logs.val_accuracy || 0
+            };
+            logger.info(`模型训练进度`, {
+              epoch: epoch + 1,
+              totalEpochs: this.trainConfig.epochs,
+              loss: logs.loss,
+              accuracy: logs.accuracy,
+              valLoss: logs.val_loss,
+              valAccuracy: logs.val_accuracy
+            });
+          }
+        },
         ...this.trainConfig.callbacks
       ];
       
@@ -248,13 +300,37 @@ class NeuralNetworkModel {
       this.stats.trainingTime += Date.now() - startTime;
       this.isTrained = true;
       
-      logger.info('模型训练完成', {
+      // 更新训练状态
+      const endTime = Date.now();
+      this.trainingStatus = {
+        ...this.trainingStatus,
+        isTraining: false,
+        endTime: endTime,
+        status: 'completed'
+      };
+      
+      // 保存训练历史
+      const trainingResult = {
+        id: Date.now().toString(),
+        startTime: this.trainingStatus.startTime,
+        endTime: endTime,
+        duration: endTime - this.trainingStatus.startTime,
         epochs: history.epochs.length,
         finalLoss: history.history.loss[history.history.loss.length - 1],
         finalAccuracy: history.history.accuracy[history.history.accuracy.length - 1],
         finalValLoss: history.history.val_loss[history.history.val_loss.length - 1],
         finalValAccuracy: history.history.val_accuracy[history.history.val_accuracy.length - 1],
-        trainingTime: Date.now() - startTime
+        history: history.history
+      };
+      this.trainingHistory.push(trainingResult);
+      
+      logger.info('模型训练完成', {
+        epochs: history.epochs.length,
+        finalLoss: trainingResult.finalLoss,
+        finalAccuracy: trainingResult.finalAccuracy,
+        finalValLoss: trainingResult.finalValLoss,
+        finalValAccuracy: trainingResult.finalValAccuracy,
+        trainingTime: trainingResult.duration
       });
       
       // 保存模型
@@ -263,17 +339,43 @@ class NeuralNetworkModel {
       return {
         success: true,
         history: history,
-        trainingTime: Date.now() - startTime
+        trainingTime: trainingResult.duration,
+        result: trainingResult
       };
       
     } catch (error) {
       logger.error('模型训练失败', error);
+      
+      // 更新训练状态为失败
+      this.trainingStatus = {
+        ...this.trainingStatus,
+        isTraining: false,
+        endTime: Date.now(),
+        status: 'failed'
+      };
+      
       return {
         success: false,
         error: error.message,
         trainingTime: Date.now() - startTime
       };
     }
+  }
+  
+  /**
+   * 获取当前训练状态
+   * @returns {Object} 训练状态信息
+   */
+  getTrainingStatus() {
+    return this.trainingStatus;
+  }
+  
+  /**
+   * 获取训练历史记录
+   * @returns {Array} 训练历史记录
+   */
+  getTrainingHistory() {
+    return this.trainingHistory;
   }
   
   /**
@@ -467,7 +569,9 @@ class NeuralNetworkModel {
       outputShape: this.outputShape,
       modelPath: this.modelPath,
       stats: this.stats,
-      trainConfig: this.trainConfig
+      trainConfig: this.trainConfig,
+      trainingStatus: this.trainingStatus,
+      trainingHistory: this.trainingHistory
     };
   }
   
@@ -496,6 +600,43 @@ class NeuralNetworkModel {
     this.model.setWeights(weights);
     logger.info('模型权重已更新');
   }
-}
+  
+  /**
+   * 获取训练状态
+   * @returns {Object} 训练状态
+   */
+  getTrainingStatus() {
+    return {
+      ...this.trainingStatus
+    };
+  }
+  
+  /**
+   * 获取训练历史记录
+   * @returns {Array} 训练历史
+   */
+  getTrainingHistory() {
+    return [...this.trainingHistory];
+  }
+  
+  /**
+   * 清除训练历史记录
+   */
+  clearTrainingHistory() {
+    this.trainingHistory = [];
+    logger.info('训练历史已清除');
+  }
+  
+  /**
+   * 更新训练状态
+   * @param {Object} updates - 训练状态更新
+   */
+  updateTrainingStatus(updates) {
+    this.trainingStatus = {
+      ...this.trainingStatus,
+      ...updates
+    };
+  }
+};
 
 module.exports = NeuralNetworkModel;

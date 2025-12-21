@@ -7,7 +7,8 @@ import {
   ListOrdered,
   Moon,
   PlayCircle,
-  Settings
+  Settings,
+  BarChart2
 } from 'lucide-react';
 import { useTheme } from './theme';
 
@@ -15,6 +16,7 @@ const navItems = [
   { to: '/dashboard', label: '仪表板', icon: Gauge },
   { to: '/proxy', label: '测试 / 播放', icon: PlayCircle },
   { to: '/cache', label: '缓存管理', icon: HardDrive },
+  { to: '/model-training', label: '模型训练', icon: BarChart2 },
   { to: '/settings', label: '设置', icon: Settings },
   { to: '/logs', label: '日志', icon: ListOrdered }
 ] as const;

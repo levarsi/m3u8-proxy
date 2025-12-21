@@ -25,6 +25,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// 解析JSON请求体
+app.use(express.json());
+
 // 静态文件服务
 if (config.ui.enabled) {
   app.use(express.static('public'));
@@ -34,7 +37,7 @@ if (config.ui.enabled) {
 if (config.cors.enabled) {
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', config.cors.origin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     next();
   });
@@ -812,6 +815,269 @@ app.post('/nn-model/config', express.json(), (req, res) => {
     logger.error('更新神经网络模型配置失败', error);
     res.status(400).json({
       error: '配置更新失败',
+      message: error.message
+    });
+  }
+});
+
+// 启动模型训练
+app.post('/nn-model/train', express.json(), async (req, res) => {
+  try {
+    // 检查 M3U8Processor 是否有 nnModel 属性
+    if (!m3u8Processor.nnModel) {
+      return res.status(500).json({
+        error: '神经网络模型未初始化'
+      });
+    }
+    
+    const trainingData = req.body.trainingData || [];
+    
+    if (!Array.isArray(trainingData) || trainingData.length === 0) {
+      return res.status(400).json({
+        error: '训练数据不能为空'
+      });
+    }
+    
+    logger.info('开始模型训练', { dataLength: trainingData.length });
+    
+    // 启动模型训练
+    const result = await m3u8Processor.nnModel.train(trainingData);
+    
+    logger.info('模型训练完成', { result });
+    
+    res.json({
+      success: result.success,
+      message: result.success ? '模型训练成功' : '模型训练失败',
+      result: result
+    });
+  } catch (error) {
+    logger.error('模型训练失败', error);
+    res.status(500).json({
+      error: '模型训练失败',
+      message: error.message
+    });
+  }
+});
+
+// 获取训练状态
+app.get('/nn-model/train/status', (req, res) => {
+  try {
+    // 检查 M3U8Processor 是否有 nnModel 属性
+    if (!m3u8Processor.nnModel) {
+      return res.json({
+        enabled: false,
+        error: '神经网络模型未初始化'
+      });
+    }
+    
+    const modelInfo = m3u8Processor.nnModel.getModelInfo();
+    const trainingStatus = m3u8Processor.nnModel.getTrainingStatus();
+    
+    res.json({
+      isTrained: modelInfo.isTrained,
+      stats: modelInfo.stats,
+      trainConfig: modelInfo.trainConfig,
+      trainingStatus: trainingStatus
+    });
+  } catch (error) {
+    logger.error('获取训练状态失败', error);
+    res.status(500).json({
+      error: '获取训练状态失败',
+      message: error.message
+    });
+  }
+});
+
+// 获取训练历史记录
+app.get('/nn-model/train/history', (req, res) => {
+  try {
+    // 检查 M3U8Processor 是否有 nnModel 属性
+    if (!m3u8Processor.nnModel) {
+      return res.json({
+        enabled: false,
+        error: '神经网络模型未初始化'
+      });
+    }
+    
+    const trainingHistory = m3u8Processor.nnModel.getTrainingHistory();
+    
+    res.json({
+      success: true,
+      history: trainingHistory
+    });
+  } catch (error) {
+    logger.error('获取训练历史记录失败', error);
+    res.status(500).json({
+      error: '获取训练历史记录失败',
+      message: error.message
+    });
+  }
+});
+
+// 重置模型
+app.post('/nn-model/reset', (req, res) => {
+  try {
+    // 检查 M3U8Processor 是否有 nnModel 属性
+    if (!m3u8Processor.nnModel) {
+      return res.status(500).json({
+        error: '神经网络模型未初始化'
+      });
+    }
+    
+    m3u8Processor.nnModel.reset();
+    
+    logger.info('模型已重置');
+    
+    res.json({
+      success: true,
+      message: '模型已重置'
+    });
+  } catch (error) {
+    logger.error('重置模型失败', error);
+    res.status(500).json({
+      error: '重置模型失败',
+      message: error.message
+    });
+  }
+});
+
+// 训练数据管理
+let trainingDataStore = [];
+
+// 获取训练数据列表
+app.get('/nn-model/training-data', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: trainingDataStore
+    });
+  } catch (error) {
+    logger.error('获取训练数据失败', error);
+    res.status(500).json({
+      error: '获取训练数据失败',
+      message: error.message
+    });
+  }
+});
+
+// 添加训练数据
+app.post('/nn-model/training-data', express.json(), (req, res) => {
+  try {
+    const data = req.body;
+    
+    if (!data || typeof data !== 'object') {
+      return res.status(400).json({
+        error: '无效的训练数据'
+      });
+    }
+    
+    // 生成唯一ID
+    const id = Date.now() + Math.random().toString(36).substring(2, 9);
+    const newData = { id, ...data, createdAt: new Date().toISOString() };
+    
+    trainingDataStore.push(newData);
+    
+    logger.info('添加训练数据', { id });
+    
+    res.json({
+      success: true,
+      message: '训练数据添加成功',
+      data: newData
+    });
+  } catch (error) {
+    logger.error('添加训练数据失败', error);
+    res.status(500).json({
+      error: '添加训练数据失败',
+      message: error.message
+    });
+  }
+});
+
+// 更新训练数据
+app.put('/nn-model/training-data/:id', express.json(), (req, res) => {
+  try {
+    const id = req.params.id;
+    const updates = req.body;
+    
+    const index = trainingDataStore.findIndex(item => item.id === id);
+    
+    if (index === -1) {
+      return res.status(404).json({
+        error: '训练数据不存在'
+      });
+    }
+    
+    trainingDataStore[index] = { ...trainingDataStore[index], ...updates, updatedAt: new Date().toISOString() };
+    
+    logger.info('更新训练数据', { id });
+    
+    res.json({
+      success: true,
+      message: '训练数据更新成功',
+      data: trainingDataStore[index]
+    });
+  } catch (error) {
+    logger.error('更新训练数据失败', error);
+    res.status(500).json({
+      error: '更新训练数据失败',
+      message: error.message
+    });
+  }
+});
+
+// 删除训练数据
+app.delete('/nn-model/training-data/:id', (req, res) => {
+  try {
+    const id = req.params.id;
+    
+    const index = trainingDataStore.findIndex(item => item.id === id);
+    
+    if (index === -1) {
+      return res.status(404).json({
+        error: '训练数据不存在'
+      });
+    }
+    
+    trainingDataStore.splice(index, 1);
+    
+    logger.info('删除训练数据', { id });
+    
+    res.json({
+      success: true,
+      message: '训练数据删除成功'
+    });
+  } catch (error) {
+    logger.error('删除训练数据失败', error);
+    res.status(500).json({
+      error: '删除训练数据失败',
+      message: error.message
+    });
+  }
+});
+
+// 批量删除训练数据
+app.delete('/nn-model/training-data/batch', express.json(), (req, res) => {
+  try {
+    const ids = req.body.ids || [];
+    
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        error: '请提供要删除的训练数据ID列表'
+      });
+    }
+    
+    trainingDataStore = trainingDataStore.filter(item => !ids.includes(item.id));
+    
+    logger.info('批量删除训练数据', { count: ids.length });
+    
+    res.json({
+      success: true,
+      message: `成功删除 ${ids.length} 条训练数据`
+    });
+  } catch (error) {
+    logger.error('批量删除训练数据失败', error);
+    res.status(500).json({
+      error: '批量删除训练数据失败',
       message: error.message
     });
   }
