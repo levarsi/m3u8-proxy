@@ -1,0 +1,19 @@
+{
+  "lifetime": {
+    "startTime": 1766327808929,
+    "totalRequests": 1,
+    "cacheHits": 0,
+    "adsFiltered": 27,
+    "trafficSavedBytes": 0
+  },
+  "detectionStats": {
+    "byRegex": 27,
+    "byTSHeader": 0,
+    "byNeuralNet": 0
+  },
+  "cacheSnapshot": {
+    "itemCount": 1,
+    "sizeBytes": 720826,
+    "lastUpdated": 1766327988965
+  }
+}

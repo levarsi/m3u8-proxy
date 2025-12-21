@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const config = require('./config');
 const M3U8Processor = require('./m3u8-processor');
 const CacheManager = require('./cache-manager');
+const statsManager = require('./stats-manager');
 const logger = require('./logger');
 
 const app = express();
@@ -457,42 +458,6 @@ app.get('/health', (req, res) => {
 });
 
 // ==========================================
-// 系统统计信息接口
-// ==========================================
-app.get('/stats', (req, res) => {
-  const stats = {
-    system: {
-      nodeVersion: process.version,
-      platform: process.platform,
-      arch: process.arch,
-      memory: process.memoryUsage(),
-      cpuUsage: process.cpuUsage(),
-      uptime: process.uptime(),
-      pid: process.pid
-    },
-    server: {
-      requestCount: global.requestCount || 0,
-      startTime: global.startTime || new Date().toISOString(),
-      version: '2.0.0'
-    },
-    cache: cacheManager.getStats(),
-    processor: {
-      enabled: m3u8Processor.isAdFilterEnabled || false,
-      stats: m3u8Processor.getStats ? m3u8Processor.getStats() : {
-        processedCount: 0,
-        adsFiltered: 0,
-        processingTime: 0
-      }
-    },
-    logger: logger.getStats ? logger.getStats() : {
-      totalLogs: 0,
-      errorCount: 0
-    }
-  };
-  
-  res.json(stats);
-});
-
 // ==========================================
 // 3. 缓存管理接口
 // ==========================================
@@ -677,7 +642,8 @@ app.get('/stats', (req, res) => {
     server: {
       startTime: new Date(Date.now() - process.uptime() * 1000).toISOString(),
       requestCount: req.app.get('requestCount') || 0
-    }
+    },
+    globalStats: statsManager.getSummary()
   };
   
   res.json(stats);
@@ -1306,6 +1272,7 @@ const server = app.listen(config.server.port, config.server.host, () => {
 // 优雅关闭
 process.on('SIGTERM', () => {
   logger.info('收到SIGTERM信号，正在关闭服务...');
+  statsManager.saveStats();
   server.close(() => {
     logger.info('服务已关闭');
     process.exit(0);
@@ -1314,6 +1281,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   logger.info('收到SIGINT信号，正在关闭服务...');
+  statsManager.saveStats();
   server.close(() => {
     logger.info('服务已关闭');
     process.exit(0);

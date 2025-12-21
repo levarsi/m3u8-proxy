@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const config = require('./config');
 const logger = require('./logger');
+const statsManager = require('./stats-manager');
 
 /**
  * 增强的缓存管理器
@@ -84,6 +85,8 @@ class CacheManager {
         items: this.cache.size,
         path: this.persistence.filePath 
       });
+      
+      this.updateGlobalSnapshot();
     } catch (error) {
       if (error.code !== 'ENOENT') {
         logger.warn('加载缓存失败', { error: error.message });
@@ -194,11 +197,13 @@ class CacheManager {
     if (!this.enabled) {
       this.stats.misses++;
       this.stats.totalRequests++;
+      statsManager.incrementRequest();
       return null;
     }
 
     const item = this.cache.get(key);
     this.stats.totalRequests++;
+    statsManager.incrementRequest();
     
     if (!item) {
       this.stats.misses++;
@@ -216,10 +221,14 @@ class CacheManager {
       this.accessFrequency.delete(key);
       this.stats.misses++;
       this.stats.deletes++;
+      
+      // 更新全局快照
+      this.updateGlobalSnapshot();
       return null;
     }
 
     this.stats.hits++;
+    statsManager.incrementCacheHit();
     logger.debug('缓存命中', { key, frequency: currentFrequency + 1 });
     return item.data;
   }
@@ -250,6 +259,16 @@ class CacheManager {
     
     this.stats.sets++;
     logger.debug('缓存设置', { key, size: this.cache.size });
+    
+    this.updateGlobalSnapshot();
+  }
+
+  /**
+   * 更新全局统计快照
+   */
+  updateGlobalSnapshot() {
+    const memoryUsage = this.getMemoryUsage();
+    statsManager.updateCacheSnapshot(this.cache.size, memoryUsage.totalSizeBytes);
   }
 
   /**
@@ -283,6 +302,7 @@ class CacheManager {
     this.accessFrequency.clear();
     this.stats.deletes += clearedCount;
     logger.info('缓存已清除', { clearedCount });
+    this.updateGlobalSnapshot();
   }
 
   /**

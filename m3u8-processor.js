@@ -2,6 +2,7 @@ const url = require('url');
 const axios = require('axios');
 const config = require('./config');
 const logger = require('./logger');
+const statsManager = require('./stats-manager');
 const TSMetadataDetector = require('./ts-metadata-detector');
 const MultiSourceFusion = require('./multi-source-fusion');
 const NeuralNetworkModel = require('./neural-network-model');
@@ -955,6 +956,20 @@ class M3U8Processor {
             if (result && result.isAd) {
                 // 广告片段，记录并以注释形式保留在文件中
                 this.stats.adsFiltered++;
+
+                // 更新全局统计
+                let detectionMethod = 'unknown';
+                if (result.nnResult && result.nnResult.isAd && result.nnResult.confidence > 0.8) {
+                    detectionMethod = 'neural_net';
+                } else if (result.fusionResult && result.fusionResult.sources) {
+                     if (result.fusionResult.sources.tsContentAnalysis && result.fusionResult.sources.tsContentAnalysis.isAd) {
+                        detectionMethod = 'ts_header';
+                     } else if ((result.fusionResult.sources.patternMatching && result.fusionResult.sources.patternMatching.isAd) ||
+                                (result.fusionResult.sources.structuralAnalysis && result.fusionResult.sources.structuralAnalysis.isAd)) {
+                        detectionMethod = 'regex';
+                     }
+                }
+                statsManager.incrementAdsFiltered(1, detectionMethod);
                 
                 // 添加注释行，让用户在查看M3U8内容时能看到被过滤的URL
                 // 格式: # EXT-X-AD-FILTERED: URL | Reason: ...
@@ -996,6 +1011,20 @@ class M3U8Processor {
             
             if (result && result.isAd) {
                 this.stats.adsFiltered++;
+                
+                // 更新全局统计
+                let detectionMethod = 'unknown';
+                if (result.nnResult && result.nnResult.isAd && result.nnResult.confidence > 0.8) {
+                    detectionMethod = 'neural_net';
+                } else if (result.fusionResult && result.fusionResult.sources) {
+                     if (result.fusionResult.sources.tsContentAnalysis && result.fusionResult.sources.tsContentAnalysis.isAd) {
+                        detectionMethod = 'ts_header';
+                     } else if ((result.fusionResult.sources.patternMatching && result.fusionResult.sources.patternMatching.isAd) ||
+                                (result.fusionResult.sources.structuralAnalysis && result.fusionResult.sources.structuralAnalysis.isAd)) {
+                        detectionMethod = 'regex';
+                     }
+                }
+                statsManager.incrementAdsFiltered(1, detectionMethod);
                 
                 // 同样以注释形式保留被过滤的标签
                 const adReason = result.fusionResult ? 

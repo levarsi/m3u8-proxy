@@ -32,6 +32,29 @@ type StatsResponse = {
     startTime?: string;
     requestCount?: number;
   };
+  globalStats?: {
+    lifetime: {
+      startTime: number;
+      totalRequests: number;
+      cacheHits: number;
+      adsFiltered: number;
+      trafficSavedBytes: number;
+    };
+    detectionStats: {
+      byRegex: number;
+      byTSHeader: number;
+      byNeuralNet: number;
+    };
+    cacheSnapshot: {
+      itemCount: number;
+      sizeBytes: number;
+      lastUpdated: number;
+    };
+    computed: {
+      hitRate: number;
+      uptimeSeconds: number;
+    };
+  };
 };
 
 type TsDetectorStats = {
@@ -122,6 +145,7 @@ export function DashboardPage() {
   const stats = statsQuery.data;
   const cache = stats?.cache;
   const processor = stats?.processor;
+  const globalStats = stats?.globalStats;
 
   const ads = processor?.stats?.adsFiltered ?? 0;
   const seg = processor?.stats?.processedCount ?? 0;
@@ -139,7 +163,8 @@ export function DashboardPage() {
       filterAccuracy: `${acc}%`,
       averageProcessingTimeMs: avg,
       tsDetectionEnabled: tsQuery.data?.config?.enabled ?? false,
-      tsTotalAnalyzed: tsQuery.data?.detector?.totalAnalyzed ?? 0
+      tsTotalAnalyzed: tsQuery.data?.detector?.totalAnalyzed ?? 0,
+      globalStats: globalStats
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -173,41 +198,28 @@ export function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="缓存命中率"
+          title="缓存命中率 (当前)"
           value={cache?.stats?.hitRate ?? '0%'}
           hint={`命中 ${safeNumber(cache?.stats?.hits)} / 未命中 ${safeNumber(cache?.stats?.misses)}`}
           icon={HardDrive}
         />
         <StatCard
-          title="总过滤广告"
+          title="总过滤广告 (当前)"
           value={safeNumber(ads).toLocaleString()}
           hint={`过滤率 ${rate}%`}
           icon={ShieldCheck}
         />
         <StatCard
-          title="过滤准确率"
-          value={`${acc}%`}
-          hint="基于 TS 检测"
-          icon={Target}
-        />
-        <StatCard
-          title="过滤效率"
-          value={`${Number(avg).toFixed(2)}ms`}
-          hint={`处理片段 ${safeNumber(seg).toLocaleString()}`}
-          icon={Zap}
-        />
-        {/* 新增：神经网络模型统计 */}
-        <StatCard
-          title="NN 模型预测数"
-          value={safeNumber(nnModelQuery.data?.stats?.processor?.totalPredictions).toLocaleString()}
-          hint={`平均耗时 ${Number(nnModelQuery.data?.stats?.processor?.avgPredictionTime || 0).toFixed(2)}ms`}
-          icon={Target}
-        />
-        <StatCard
-          title="NN 检测广告"
-          value={safeNumber(nnModelQuery.data?.stats?.processor?.nnAdsDetected).toLocaleString()}
-          hint={nnModelQuery.data?.enabled ? '模型已启用' : '模型已禁用'}
+          title="累计过滤广告"
+          value={safeNumber(globalStats?.lifetime?.adsFiltered).toLocaleString()}
+          hint={`从 ${globalStats?.lifetime?.startTime ? new Date(globalStats.lifetime.startTime).toLocaleDateString() : '-'} 开始`}
           icon={ShieldCheck}
+        />
+        <StatCard
+          title="累计命中率"
+          value={`${globalStats?.computed?.hitRate ?? 0}%`}
+          hint={`请求总数 ${safeNumber(globalStats?.lifetime?.totalRequests).toLocaleString()}`}
+          icon={Zap}
         />
       </div>
 
@@ -241,6 +253,83 @@ export function DashboardPage() {
           )}
         </Panel>
 
+        <Panel title="历史累计统计">
+          {!globalStats ? (
+            <LoadingState />
+          ) : (
+            <div className="space-y-4 text-sm text-slate-900 dark:text-slate-200">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-slate-600 dark:text-slate-400">累计请求</div>
+                  <div className="mt-1 font-medium">{safeNumber(globalStats.lifetime.totalRequests).toLocaleString()}</div>
+                </div>
+                <div>
+                  <div className="text-slate-600 dark:text-slate-400">累计拦截</div>
+                  <div className="mt-1 font-medium">{safeNumber(globalStats.lifetime.adsFiltered).toLocaleString()}</div>
+                </div>
+              </div>
+              
+              <div>
+                <div className="mb-2 text-slate-600 dark:text-slate-400">拦截手段分布</div>
+                <div className="space-y-3">
+                  {(() => {
+                    const total = (globalStats.detectionStats.byRegex || 0) + 
+                                  (globalStats.detectionStats.byTSHeader || 0) + 
+                                  (globalStats.detectionStats.byNeuralNet || 0);
+                    
+                    const getPercent = (val: number) => total > 0 ? (val / total * 100).toFixed(1) : '0';
+                    
+                    return (
+                      <>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span>模式匹配 (Regex)</span>
+                            <span>{globalStats.detectionStats.byRegex} ({getPercent(globalStats.detectionStats.byRegex)}%)</span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                            <div 
+                              className="h-full bg-blue-500" 
+                              style={{ width: `${getPercent(globalStats.detectionStats.byRegex)}%` }}
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span>TS元数据检测</span>
+                            <span>{globalStats.detectionStats.byTSHeader} ({getPercent(globalStats.detectionStats.byTSHeader)}%)</span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                            <div 
+                              className="h-full bg-emerald-500" 
+                              style={{ width: `${getPercent(globalStats.detectionStats.byTSHeader)}%` }}
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span>神经网络 (AI)</span>
+                            <span>{globalStats.detectionStats.byNeuralNet} ({getPercent(globalStats.detectionStats.byNeuralNet)}%)</span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                            <div 
+                              className="h-full bg-purple-500" 
+                              style={{ width: `${getPercent(globalStats.detectionStats.byNeuralNet)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel title="缓存概览">
           {!cache ? (
             <LoadingState />
