@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 const config = require('./config');
 const M3U8Processor = require('./m3u8-processor');
 const CacheManager = require('./cache-manager');
@@ -770,6 +771,17 @@ app.delete('/logs', (req, res) => {
     });
   }
 });
+
+// SPA 路由回退（支持前端 History 路由刷新/直达）
+if (config.ui.enabled) {
+  app.get('*', (req, res, next) => {
+    const accept = req.headers.accept || '';
+    if (typeof accept === 'string' && accept.includes('text/html')) {
+      return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
+    next();
+  });
+}
 
 // ==========================================
 // 启动服务

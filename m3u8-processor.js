@@ -184,6 +184,7 @@ class M3U8Processor {
       }
       
       logger.debug('TS内容检测完成', {
+        module: 'processor',
         url: tsUrl,
         isAd: result.isAd,
         probability: result.probability,
@@ -194,7 +195,7 @@ class M3U8Processor {
       return result;
       
     } catch (error) {
-      logger.error('TS内容检测失败', error, { url: line });
+      logger.error('TS内容检测失败', error, { module: 'processor', url: line });
       
       // 检测失败时返回保守结果
       return {
@@ -225,9 +226,9 @@ class M3U8Processor {
     };
     
     if (logLevel === 'debug' || config.adFilter.logFilteredSegments) {
-      logger.debug('广告过滤操作', logData);
+      logger.debug('广告过滤操作', { module: 'processor', ...logData });
     } else if (logLevel === 'info') {
-      logger.info(`广告过滤: ${action}`);
+      logger.info(`广告过滤: ${action}`, { module: 'processor' });
     }
     
     // 注意：统计信息在process方法中更新，这里不再重复更新
@@ -378,6 +379,7 @@ class M3U8Processor {
 
     // 记录处理统计
     logger.info('M3U8处理完成', {
+      module: 'processor',
       url: sourceUrl,
       stats: this.stats,
       isVod,
@@ -429,11 +431,11 @@ class M3U8Processor {
   addAdPattern(pattern) {
     if (pattern instanceof RegExp) {
       this.adPatterns.push(pattern);
-      logger.info('添加广告过滤规则', { pattern: pattern.source });
+      logger.info('添加广告过滤规则', { module: 'processor', pattern: pattern.source });
     } else if (typeof pattern === 'string') {
       const regex = new RegExp(pattern, 'i');
       this.adPatterns.push(regex);
-      logger.info('添加广告过滤规则', { pattern });
+      logger.info('添加广告过滤规则', { module: 'processor', pattern });
     }
   }
 
@@ -444,7 +446,7 @@ class M3U8Processor {
   removeAdPattern(index) {
     if (index >= 0 && index < this.adPatterns.length) {
       const removed = this.adPatterns.splice(index, 1)[0];
-      logger.info('移除广告过滤规则', { pattern: removed.source || removed });
+      logger.info('移除广告过滤规则', { module: 'processor', pattern: removed.source || removed });
     }
   }
 
