@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Activity,
   Gauge,
@@ -8,7 +8,8 @@ import {
   Moon,
   PlayCircle,
   Settings,
-  BarChart2
+  BarChart2,
+  LogOut
 } from 'lucide-react';
 import { useTheme } from './theme';
 
@@ -23,6 +24,13 @@ const navItems = [
 
 export function AppShell() {
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+
+  function handleLogout() {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    navigate('/login', { replace: true });
+  }
 
   return (
     <div className="min-h-screen text-slate-900 dark:text-slate-100">
@@ -44,7 +52,7 @@ export function AppShell() {
               <Moon className="h-4 w-4" />
               {theme === 'dark' ? 'Dark' : 'Light'}
             </button>
-            <div className="text-xs text-slate-500 dark:text-slate-300">UI v2</div>
+            {/* <div className="text-xs text-slate-500 dark:text-slate-300">UI v2</div> */}
           </div>
         </div>
       </div>
@@ -72,6 +80,16 @@ export function AppShell() {
                 </NavLink>
               );
             })}
+
+            <div className="my-1 border-t border-slate-100 dark:border-white/5" />
+
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-rose-600 transition hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-900/20"
+            >
+              <LogOut className="h-4 w-4" />
+              退出登录
+            </button>
           </nav>
         </aside>
 

@@ -3,6 +3,7 @@ const axios = require('axios');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
+const jwt = require('jsonwebtoken');
 const config = require('./config');
 const M3U8Processor = require('./m3u8-processor');
 const CacheManager = require('./cache-manager');
@@ -39,10 +40,87 @@ if (config.cors.enabled) {
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', config.cors.origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // 添加 Authorization
     next();
   });
 }
+
+// ==========================================
+// 认证接口与中间件
+// ==========================================
+
+// 登录接口
+app.post('/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  const { auth } = config;
+
+  if (!auth.enabled) {
+    return res.json({ token: 'disabled', user: { username: 'anonymous' } });
+  }
+
+  if (username === auth.username && password === auth.password) {
+    const user = { username };
+    const token = jwt.sign(user, auth.jwtSecret, { expiresIn: auth.expiresIn });
+    logger.info(`用户登录成功: ${username}`);
+    return res.json({ token, user });
+  }
+
+  logger.warn(`登录失败: ${username}`);
+  res.status(401).json({ error: '用户名或密码错误' });
+});
+
+// 验证Token接口
+app.get('/auth/check', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  
+  if (!config.auth.enabled) return res.json({ valid: true, user: { username: 'anonymous' } });
+  if (!token) return res.status(401).json({ valid: false });
+
+  jwt.verify(token, config.auth.jwtSecret, (err, user) => {
+    if (err) return res.status(403).json({ valid: false });
+    res.json({ valid: true, user });
+  });
+});
+
+// 全局认证中间件
+app.use((req, res, next) => {
+  // 如果认证未启用，跳过
+  if (!config.auth.enabled) return next();
+
+  // 白名单路径 (精确匹配)
+  const publicPaths = [
+    '/auth/login', 
+    '/auth/check', 
+    '/health', 
+    '/mock-stream.m3u8'
+  ];
+  
+  if (publicPaths.includes(req.path)) return next();
+  
+  // 静态资源前缀 (如果在 express.static 之后执行到这里，说明可能是 API 404 或者漏网之鱼，但也可能是受保护的 API)
+  // 这里主要为了防止对未匹配的静态资源请求返回 401 而不是 404
+  if (req.path.startsWith('/assets/') || req.path === '/favicon.ico') return next();
+
+  // 页面导航请求 (Text/HTML) - 由前端路由守卫处理，后端放行返回 index.html
+  if (req.headers.accept && req.headers.accept.includes('text/html')) return next();
+
+  // 验证 Token
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    // 允许 OPTIONS 请求通过 (CORS预检)
+    if (req.method === 'OPTIONS') return next();
+    return res.status(401).json({ error: '未授权访问' });
+  }
+
+  jwt.verify(token, config.auth.jwtSecret, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Token 无效或过期' });
+    req.user = user;
+    next();
+  });
+});
 
 // 速率限制中间件
 if (config.security.rateLimit.enabled) {

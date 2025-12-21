@@ -8,6 +8,15 @@ module.exports = {
     host: process.env.HOST || '127.0.0.1',
     autoOpenBrowser: process.env.AUTO_OPEN_BROWSER === 'true' || false
   },
+
+  // 认证配置
+  auth: {
+    enabled: process.env.AUTH_ENABLED !== 'false',
+    username: process.env.AUTH_USERNAME || 'admin',
+    password: process.env.AUTH_PASSWORD || 'admin', // 默认密码，建议通过环境变量修改
+    jwtSecret: process.env.JWT_SECRET || 'your-secret-key-change-it-in-production',
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+  },
   
   // 广告过滤配置
   adFilter: {
