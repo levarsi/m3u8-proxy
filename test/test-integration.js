@@ -5,8 +5,8 @@
  * 测试M3U8处理器的TS检测功能
  */
 
-const M3U8Processor = require('./m3u8-processor');
-const logger = require('./logger');
+const M3U8Processor = require('../m3u8-processor');
+const logger = require('../logger');
 
 // 模拟M3U8内容
 const mockM3U8 = `#EXTM3U

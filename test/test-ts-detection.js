@@ -5,8 +5,8 @@
  * 用于验证TS元数据检测器的基本功能
  */
 
-const TSMetadataDetector = require('./ts-metadata-detector');
-const logger = require('./logger');
+const TSMetadataDetector = require('../ts-metadata-detector');
+const logger = require('../logger');
 
 async function runTests() {
   console.log('开始TS检测功能测试...\n');

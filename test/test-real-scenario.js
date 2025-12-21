@@ -5,8 +5,8 @@
  * 测试TS检测功能在接近实际使用场景中的表现
  */
 
-const M3U8Processor = require('./m3u8-processor');
-const TSMetadataDetector = require('./ts-metadata-detector');
+const M3U8Processor = require('../m3u8-processor');
+const TSMetadataDetector = require('../ts-metadata-detector');
 
 // 模拟一个包含真实TS文件URL的M3U8
 const realisticM3U8 = `#EXTM3U

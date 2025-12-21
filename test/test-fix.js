@@ -1,6 +1,6 @@
 // 测试修复效果的快速脚本
-const M3U8Processor = require('./m3u8-processor');
-const config = require('./config');
+const M3U8Processor = require('../m3u8-processor');
+const config = require('../config');
 
 async function testFix() {
   console.log('🧪 测试修复后的广告过滤效果...\n');
