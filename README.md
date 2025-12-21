@@ -481,21 +481,6 @@ grep "ERROR" logs/app.log
 - **文档**: [完整文档](https://github.com/your-username/m3u8-proxy-demo/wiki)
 - **讨论**: [GitHub Discussions](https://github.com/your-username/m3u8-proxy-demo/discussions)
 
-## 🎯 路线图
-
-### v2.1.0 (计划中)
-- [ ] 支持集群部署
-- [ ] 添加监控告警系统
-- [ ] 增强广告检测算法
-- [ ] 支持更多流媒体格式
-
-### v2.2.0 (规划中)
-- [ ] 机器学习广告检测
-- [ ] 分布式缓存支持
-- [ ] GraphQL API 接口
-- [ ] 微服务架构支持
-
----
 
 **版本**: 2.0.0  
 **更新时间**: 2025年12月
