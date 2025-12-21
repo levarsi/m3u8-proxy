@@ -86,6 +86,11 @@ npm run ui:build
 npm start
 ```
 
+### 4. 访问与登录
+- **管理后台**: `http://localhost:3000`
+- **默认账号**: `admin`
+- **默认密码**: `admin`
+
 ## ⚙️ 配置说明
 
 ### 环境变量配置
@@ -116,12 +121,8 @@ CORS_ENABLED=true                  # 启用 CORS
 CORS_ORIGIN=*                      # 允许的源
 ```
 
-### 3. 访问与登录
-- **管理后台**: `http://localhost:3000`
-- **默认账号**: `admin`
-- **默认密码**: `admin`
 
-## ⚙️ 核心配置 (`config.js`)
+### ⚙️ 核心配置 (`config.js`)
 
 ```javascript
 module.exports = {
