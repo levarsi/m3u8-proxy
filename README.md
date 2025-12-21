@@ -475,12 +475,6 @@ tail -f logs/app.log
 grep "ERROR" logs/app.log
 ```
 
-## 📞 技术支持
-
-- **GitHub Issues**: [提交问题](https://github.com/your-username/m3u8-proxy-demo/issues)
-- **文档**: [完整文档](https://github.com/your-username/m3u8-proxy-demo/wiki)
-- **讨论**: [GitHub Discussions](https://github.com/your-username/m3u8-proxy-demo/discussions)
-
 
 **版本**: 2.0.0  
 **更新时间**: 2025年12月
