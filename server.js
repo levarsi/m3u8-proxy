@@ -226,6 +226,12 @@ app.get('/proxy', async (req, res) => {
   const targetUrl = req.query.url;
   
   if (!targetUrl) {
+    // 检查是否为浏览器直接访问页面（SPA路由刷新）
+    const accept = req.headers.accept || '';
+    if (config.ui.enabled && typeof accept === 'string' && accept.includes('text/html')) {
+      return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
+
     logger.warn('缺少URL参数');
     return res.status(400).json({ 
       error: '缺少参数',
@@ -603,6 +609,12 @@ app.get('/stats', (req, res) => {
 // 10. 日志接口
 // ==========================================
 app.get('/logs', (req, res) => {
+  // 检查是否为浏览器直接访问页面（SPA路由刷新）
+  const accept = req.headers.accept || '';
+  if (config.ui.enabled && typeof accept === 'string' && accept.includes('text/html')) {
+    return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
+
   try {
     const { level, module, since, limit } = req.query;
     const options = {};
