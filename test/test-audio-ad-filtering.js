@@ -1,5 +1,5 @@
 // 测试音频广告过滤功能
-const M3U8Processor = require('./m3u8-processor');
+const M3U8Processor = require('../m3u8-processor');
 const fs = require('fs');
 const path = require('path');
 
