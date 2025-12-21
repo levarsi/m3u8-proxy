@@ -138,14 +138,43 @@ class M3U8Processor {
     
     // 4. TS内容分析
     if (this.enableTSDetection) {
-      const tsAdResult = await this.isAdByTSContent(line);
-      detectionResults.tsContentAnalysis = {
-        isAd: tsAdResult.isAd,
-        confidence: tsAdResult.confidence || 0,
-        probability: tsAdResult.probability || 0,
-        features: tsAdResult.features || {},
-        metadata: tsAdResult.metadata || null
-      };
+      // 漏斗策略：决定是否运行TS检测
+      let shouldRunTS = true;
+      
+      // 1. 如果已经通过模式匹配高置信度确认为广告，跳过TS检测
+      if (detectionResults.patternMatching.isAd && detectionResults.patternMatching.confidence > 0.8) {
+        shouldRunTS = false;
+      }
+      
+      // 2. 如果配置了仅检测可疑片段
+      if (shouldRunTS && config.adFilter.tsDetection.suspiciousOnly) {
+         // 可疑条件：
+         // a. 常见广告时长 (5s, 10s, 15s, 30s)
+         // b. 极短片段 (< 3s)
+         // c. 在不连续点附近 (由 playlistContext 分析)
+         
+         const roundedDuration = currentDuration ? Math.round(currentDuration) : 0;
+         const isSuspiciousDuration = [5, 10, 15, 30].includes(roundedDuration) || (currentDuration > 0 && currentDuration < 3);
+         
+         // 检查上下文是否提示可疑（例如在不连续点附近）
+         const isContextSuspicious = detectionResults.playlistContext && detectionResults.playlistContext.confidence > 0.3;
+         
+         shouldRunTS = isSuspiciousDuration || isContextSuspicious;
+      }
+
+      if (shouldRunTS) {
+        const tsAdResult = await this.isAdByTSContent(line);
+        detectionResults.tsContentAnalysis = {
+          isAd: tsAdResult.isAd,
+          confidence: tsAdResult.confidence || 0,
+          probability: tsAdResult.probability || 0,
+          features: tsAdResult.features || {},
+          metadata: tsAdResult.metadata || null
+        };
+      } else {
+        // 跳过检测，记录为空结果
+        detectionResults.tsContentAnalysis = { isAd: false, confidence: 0, skipped: true };
+      }
     }
     
     // 5. 网络分析
@@ -810,123 +839,157 @@ class M3U8Processor {
     this.baseUrl = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
 
     const lines = m3u8Content.split('\n');
-    const processedLines = [];
-    const filteredSegments = []; // 记录被过滤的片段信息
-    let bufferTags = []; // 暂存与切片相关的标签
     let isVod = false;
-    let currentDuration = null; // 当前片段的时长
-    let segmentIndex = 0; // 当前片段索引
     
     // 更新播放列表上下文
     this.updatePlaylistContext(m3u8Content);
+
+    // Pass 1: Identification & Grouping (识别与分组)
+    const entries = [];
+    let currentDuration = null;
+    let segmentIndex = 0;
+    let bufferTags = []; // 暂存与切片强绑定的标签 (EXTINF, BYTERANGE)
 
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i].trim();
       if (!line) continue;
 
-      // 检测是否为VOD类型
       if (line.startsWith('#EXT-X-PLAYLIST-TYPE:VOD')) {
         isVod = true;
       }
 
-      // 解析EXTINF标签获取时长信息
       if (line.startsWith('#EXTINF:')) {
         const durationMatch = line.match(/#EXTINF:([\d.]+)/);
         if (durationMatch) {
           currentDuration = parseFloat(durationMatch[1]);
         }
-      }
-
-      // 处理标签行
-      if (line.startsWith('#')) {
-        // 检查是否是包含URI的标签
+        bufferTags.push(line);
+      } else if (line.startsWith('#EXT-X-BYTERANGE:')) {
+        bufferTags.push(line);
+      } else if (line.startsWith('#')) {
+        // 处理其他标签
         if (line.startsWith('#EXT-X-MEDIA:') || line.startsWith('#EXT-X-STREAM-INF:')) {
-          // 提取URI属性
+          // 包含URI的标签，可能需要检测
           const uriMatch = line.match(/URI=["']?([^"'\s,]+)["']?/i);
           if (uriMatch) {
-            const uri = uriMatch[1];
-            this.stats.totalProcessed++;
-            const adResult = await this.isAdvertisement(uri, null, segmentIndex);
-            const isAd = adResult.isAd;
-
-            if (isAd) {
-              // 广告片段，记录并跳过该标签
-              filteredSegments.push({
-                url: uri,
-                duration: null,
-                reason: 'advertisement',
-                confidence: adResult.confidence,
-                fusionResult: adResult.fusionResult
-              });
-              this.stats.adsFiltered++;
-              // 清空bufferTags，避免误写入
-              bufferTags = [];
-              // 跳过该标签及其对应的URL行（如果有的话）
-              if (i + 1 < lines.length && !lines[i + 1].trim().startsWith('#')) {
-                i++; // 跳过下一行的URL
-              }
-              continue;
-            }
+            entries.push({
+              type: 'tag_with_uri',
+              line: line,
+              uri: uriMatch[1],
+              index: segmentIndex
+            });
+          } else {
+            entries.push({ type: 'tag', line: line });
           }
-        }
-
-        // 处理非广告标签
-        // 先清空缓存的标签
-        if (bufferTags.length > 0) {
-          processedLines.push(...bufferTags);
-          bufferTags = [];
-        }
-        
-        // 写入当前标签
-        processedLines.push(line);
-      } else {
-        // 处理文件路径/URL行
-        this.stats.totalProcessed++;
-        const adResult = await this.isAdvertisement(line, currentDuration, segmentIndex);
-        const isAd = adResult.isAd;
-
-        if (isAd) {
-          // 广告片段，记录并清空缓存的标签
-          filteredSegments.push({
-            url: line,
-            duration: currentDuration,
-            reason: 'advertisement',
-            confidence: adResult.confidence,
-            fusionResult: adResult.fusionResult
-          });
-          bufferTags = [];
-          this.stats.adsFiltered++;
         } else {
-          // 正常片段，先写入缓存的标签
-          if (bufferTags.length > 0) {
-            processedLines.push(...bufferTags);
-            bufferTags = [];
-          }
-
-          // 路径重写
-          const resolvedUrl = this.resolveUrl(line);
-          processedLines.push(resolvedUrl);
-          this.stats.segmentsKept++;
-          
-          // 记录最近的非广告片段时长，用于学习
-          if (currentDuration) {
-            this.playlistContext.recentNonAdDurations.push(currentDuration);
-            // 只保留最近10个非广告片段时长
-            if (this.playlistContext.recentNonAdDurations.length > 10) {
-              this.playlistContext.recentNonAdDurations.shift();
-            }
-          }
+          // 其他全局或状态标签 (KEY, DISCONTINUITY等)，直接保留以防破坏状态
+          entries.push({ type: 'tag', line: line });
         }
-        
-        // 重置当前时长
+      } else {
+        // 片段 URL
+        entries.push({
+          type: 'segment',
+          line: line, // URL
+          duration: currentDuration,
+          index: segmentIndex++,
+          buffer: bufferTags
+        });
+        bufferTags = [];
         currentDuration = null;
-        segmentIndex++;
       }
     }
-
-    // 循环结束后，如果缓存中还有残留标签（理论上不应该），为了安全写入
+    
+    // 清理残留的 bufferTags (理论上不应有，除非文件结尾错误)
     if (bufferTags.length > 0) {
-      processedLines.push(...bufferTags);
+        entries.push({ type: 'buffer_flush', buffer: bufferTags });
+    }
+
+    // Pass 2: Concurrent Processing (并发处理)
+    // 筛选需要检测的项
+    const itemsNeedDetection = entries.filter(e => e.type === 'segment' || e.type === 'tag_with_uri');
+    const concurrencyLimit = config.adFilter.tsDetection.concurrencyLimit || 5;
+
+    // 并发执行辅助函数
+    const runConcurrent = async (items, limit) => {
+        const results = new Map();
+        let idx = 0;
+        const worker = async () => {
+            while (idx < items.length) {
+                const item = items[idx++];
+                const uri = item.type === 'segment' ? item.line : item.uri;
+                try {
+                    const result = await this.isAdvertisement(uri, item.duration, item.index);
+                    results.set(item, result);
+                } catch (e) {
+                    logger.error('广告检测出错', e);
+                    results.set(item, { isAd: false, confidence: 0 }); // 出错默认保留
+                }
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+        return results;
+    };
+
+    const detectionResults = await runConcurrent(itemsNeedDetection, concurrencyLimit);
+
+    // Pass 3: Reconstruction (重组)
+    const processedLines = [];
+    const filteredSegments = [];
+
+    for (const entry of entries) {
+        if (entry.type === 'tag') {
+            processedLines.push(entry.line);
+        } else if (entry.type === 'buffer_flush') {
+            processedLines.push(...entry.buffer);
+        } else if (entry.type === 'segment') {
+            const result = detectionResults.get(entry);
+            this.stats.totalProcessed++;
+
+            if (result && result.isAd) {
+                // 广告片段，记录并跳过 (连同绑定的 bufferTags 一起跳过)
+                this.stats.adsFiltered++;
+                filteredSegments.push({
+                    url: entry.line,
+                    duration: entry.duration,
+                    reason: 'advertisement',
+                    confidence: result.confidence,
+                    fusionResult: result.fusionResult
+                });
+            } else {
+                // 正常片段，保留 bufferTags 和 URL
+                if (entry.buffer && entry.buffer.length > 0) {
+                    processedLines.push(...entry.buffer);
+                }
+                
+                // 路径重写
+                const resolvedUrl = this.resolveUrl(entry.line);
+                processedLines.push(resolvedUrl);
+                this.stats.segmentsKept++;
+
+                // 记录学习数据
+                if (entry.duration) {
+                    this.playlistContext.recentNonAdDurations.push(entry.duration);
+                    if (this.playlistContext.recentNonAdDurations.length > 10) {
+                        this.playlistContext.recentNonAdDurations.shift();
+                    }
+                }
+            }
+        } else if (entry.type === 'tag_with_uri') {
+            const result = detectionResults.get(entry);
+            this.stats.totalProcessed++;
+            
+            if (result && result.isAd) {
+                this.stats.adsFiltered++;
+                filteredSegments.push({
+                    url: entry.uri,
+                    reason: 'advertisement in tag',
+                    confidence: result.confidence,
+                    fusionResult: result.fusionResult
+                });
+            } else {
+                processedLines.push(entry.line);
+            }
+        }
     }
 
     // 添加处理信息注释

@@ -1,36 +1,121 @@
 const logger = require('./logger');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 
-// 尝试加载 mpegts.js，处理 Node.js 环境下的兼容性问题
-let mpegts;
-try {
-  // 检查是否为浏览器环境
-  if (typeof window !== 'undefined') {
-    mpegts = require('mpegts.js');
-  } else {
-    // Node.js 环境下的回退实现
-    mpegts = {
-      createParser: () => {
-        return {
-          on: () => {},
-          write: () => {},
-          end: () => {}
-        };
-      }
+/**
+ * 简易TS解析器 - 用于Node.js环境下的轻量级元数据提取
+ */
+class SimpleTSParser {
+  constructor() {
+    this.pmtPid = -1;
+    this.videoPid = -1;
+    this.audioPid = -1;
+    this.metadata = {
+      pid: 0,
+      streamType: 0,
+      videoInfo: { width: 0, height: 0, frameRate: 0, profile: '' },
+      audioInfo: { codec: '', sampleRate: 0, channels: 0 },
+      duration: 0,
+      bitrate: 0,
+      timestamps: { pts: 0, dts: 0 },
+      programInfo: [],
+      streamInfo: []
     };
   }
-} catch (error) {
-  logger.warn('未能加载 mpegts.js，将使用基础解析实现', error.message);
-  mpegts = {
-    createParser: () => {
-      return {
-        on: () => {},
-        write: () => {},
-        end: () => {}
-      };
+
+  parse(buffer) {
+    const packetSize = 188;
+    for (let i = 0; i < buffer.length; i += packetSize) {
+      if (i + packetSize > buffer.length) break;
+      
+      const packet = buffer.subarray(i, i + packetSize);
+      if (packet[0] !== 0x47) continue; // Sync byte check
+
+      const pid = ((packet[1] & 0x1f) << 8) | packet[2];
+      const payloadUnitStartIndicator = (packet[1] & 0x40) !== 0;
+      const adaptationFieldControl = (packet[3] & 0x30) >> 4;
+      
+      let offset = 4;
+      if (adaptationFieldControl === 2 || adaptationFieldControl === 3) {
+        const adaptationFieldLength = packet[4];
+        offset += adaptationFieldLength + 1;
+      }
+
+      if (offset >= packetSize) continue;
+
+      if (payloadUnitStartIndicator) {
+        if (pid === 0) { // PAT
+          this.parsePAT(packet, offset);
+        } else if (pid === this.pmtPid) { // PMT
+          this.parsePMT(packet, offset);
+        } else if (pid === this.videoPid) {
+           // TODO: Parse video PES for resolution if needed (complex)
+           // For now, we rely on stream type from PMT
+        }
+      }
     }
-  };
+    return this.metadata;
+  }
+
+  parsePAT(packet, offset) {
+    // Pointer field
+    const pointerField = packet[offset];
+    offset += pointerField + 1;
+    
+    // Table header
+    // const tableId = packet[offset];
+    const sectionLength = ((packet[offset + 1] & 0x0f) << 8) | packet[offset + 2];
+    
+    // Iterate programs (start at offset + 8, up to section end - 4 CRC)
+    let current = offset + 8;
+    const end = offset + 3 + sectionLength - 4;
+    
+    while (current < end) {
+      const programNumber = (packet[current] << 8) | packet[current + 1];
+      const programMapPid = ((packet[current + 2] & 0x1f) << 8) | packet[current + 3];
+      
+      if (programNumber !== 0) {
+        this.pmtPid = programMapPid;
+        this.metadata.programInfo.push({ programNumber, pid: programMapPid });
+      }
+      current += 4;
+    }
+  }
+
+  parsePMT(packet, offset) {
+    const pointerField = packet[offset];
+    offset += pointerField + 1;
+    
+    const sectionLength = ((packet[offset + 1] & 0x0f) << 8) | packet[offset + 2];
+    const programInfoLength = ((packet[offset + 10] & 0x0f) << 8) | packet[offset + 11];
+    
+    let current = offset + 12 + programInfoLength;
+    const end = offset + 3 + sectionLength - 4;
+    
+    while (current < end) {
+      const streamType = packet[current];
+      const elementaryPid = ((packet[current + 1] & 0x1f) << 8) | packet[current + 2];
+      const esInfoLength = ((packet[current + 3] & 0x0f) << 8) | packet[current + 4];
+      
+      this.metadata.streamInfo.push({ pid: elementaryPid, type: streamType });
+      
+      // H.264 (0x1b) or H.265 (0x24)
+      if (streamType === 0x1b || streamType === 0x24) {
+        this.videoPid = elementaryPid;
+        this.metadata.streamType = streamType;
+        this.metadata.videoInfo.codec = streamType === 0x1b ? 'H264' : 'H265';
+      }
+      // AAC (0x0f) or MP3 (0x03, 0x04) or AC3 (0x81)
+      else if (streamType === 0x0f || streamType === 0x03 || streamType === 0x04 || streamType === 0x81) {
+        this.audioPid = elementaryPid;
+        this.metadata.audioInfo.codec = 'AAC'; // Simplified
+      }
+      
+      current += 5 + esInfoLength;
+    }
+    this.metadata.pid = this.pmtPid;
+  }
 }
 
 /**
@@ -66,6 +151,15 @@ class TSMetadataDetector {
 
     // 元数据缓存（避免重复分析相同内容）
     this.metadataCache = new Map();
+    this.metadataCachePath = path.join(__dirname, 'data', 'ts-metadata-cache.json');
+    
+    // 加载缓存
+    this.loadMetadataCache();
+    
+    // 自动保存缓存（每分钟）
+    if (typeof setInterval !== 'undefined') {
+      setInterval(() => this.saveMetadataCache(), 60000).unref(); // unref allow process to exit
+    }
     
     // 智能学习模块
     this.learningModule = {
@@ -181,6 +275,55 @@ class TSMetadataDetector {
         error: error.message,
         analysisTime: Date.now() - startTime
       };
+    }
+  }
+
+  /**
+   * 加载元数据缓存
+   */
+  loadMetadataCache() {
+    try {
+      const dataDir = path.dirname(this.metadataCachePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      if (fs.existsSync(this.metadataCachePath)) {
+        const data = JSON.parse(fs.readFileSync(this.metadataCachePath, 'utf8'));
+        if (Array.isArray(data)) {
+          // 恢复 Map，并过滤掉过期项（如果需要）
+          this.metadataCache = new Map(data);
+          logger.info(`已加载元数据缓存，共 ${this.metadataCache.size} 条记录`);
+        }
+      }
+    } catch (error) {
+      logger.error('加载元数据缓存失败', error);
+    }
+  }
+
+  /**
+   * 保存元数据缓存
+   */
+  saveMetadataCache() {
+    try {
+      if (this.metadataCache.size === 0) return;
+      
+      const dataDir = path.dirname(this.metadataCachePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      // 将 Map 转换为数组进行存储
+      // 只保存最近的 2000 条，避免文件过大
+      let entries = Array.from(this.metadataCache.entries());
+      if (entries.length > 2000) {
+        entries = entries.slice(-2000);
+      }
+      
+      fs.writeFileSync(this.metadataCachePath, JSON.stringify(entries));
+      logger.debug('元数据缓存已保存');
+    } catch (error) {
+      logger.error('保存元数据缓存失败', error);
     }
   }
 
@@ -423,93 +566,20 @@ class TSMetadataDetector {
         throw new Error('无效的TS格式');
       }
 
-      // 使用mpegts.js创建解析器
-      const parser = mpegts.createParser();
-      let metadata = {
-        pid: 0,
-        streamType: 0,
-        videoInfo: null,
-        audioInfo: null,
-        duration: 0,
-        bitrate: 0,
-        timestamps: {
-          pts: 0,
-          dts: 0
-        },
-        size: buffer.length,
-        programInfo: [],
-        streamInfo: []
-      };
+      // 使用简易解析器
+      const parser = new SimpleTSParser();
+      let metadata = parser.parse(buffer);
 
-      // 解析PAT表
-      parser.on('pat', (data) => {
-        metadata.pat = data;
-        metadata.programInfo = data.program_numbers.map(pnum => ({
-          programNumber: pnum,
-          pid: data.pids[pnum]
-        }));
-      });
-
-      // 解析PMT表
-      parser.on('pmt', (data) => {
-        metadata.pmt = data;
-        metadata.streamInfo = data.streams.map(stream => ({
-          pid: stream.pid,
-          type: stream.type,
-          codec: stream.codec
-        }));
-        metadata.pid = data.pmt_pid;
-      });
-
-      // 解析视频元数据
-      parser.on('video_data', (data) => {
-        if (data.codec === 'H264' || data.codec === 'H265') {
-          metadata.videoInfo = {
-            width: data.width || 0,
-            height: data.height || 0,
-            frameRate: data.frame_rate || 0,
-            profile: data.profile || '',
-            codec: data.codec
-          };
-        }
-      });
-
-      // 解析音频元数据
-      parser.on('audio_data', (data) => {
-        metadata.audioInfo = {
-          codec: data.codec || '',
-          sampleRate: data.sample_rate || 0,
-          channels: data.channels || 0,
-          bitrate: data.bitrate || 0
-        };
-      });
-
-      // 解析PTS/DTS时间戳
-      parser.on('pts', (data) => {
-        metadata.timestamps = {
-          pts: data.pts || 0,
-          dts: data.dts || 0
-        };
-      });
-
-      // 解析码率信息
-      parser.on('bitrate', (data) => {
-        metadata.bitrate = data.bitrate || 0;
-      });
-
-      // 执行解析
-      parser.write(new Uint8Array(buffer));
-      parser.end();
-
-      // 估算时长（如果没有直接获取到）
-      if (!metadata.duration) {
+      // 估算时长（如果未从元数据中获取）
+      if (!metadata.duration || metadata.duration === 0) {
         metadata.duration = this.estimateDuration(buffer);
       }
+      // 估算码率
+      if (!metadata.bitrate || metadata.bitrate === 0) {
+        metadata.bitrate = this.estimateBitrate(buffer);
+      }
 
-      // 检测流类型
-      metadata.streamType = metadata.streamInfo.find(stream => 
-        stream.type === 0x1b || stream.type === 0x24
-      )?.type || 0;
+      metadata.size = buffer.length;
 
       return metadata;
     } catch (error) {
@@ -535,8 +605,12 @@ class TSMetadataDetector {
    */
   async downloadAndParseTS(tsUrl) {
     try {
-      const axios = require('axios');
-      const response = await axios.get(tsUrl, { responseType: 'arraybuffer' });
+      // 仅下载前 256KB，足够包含 PAT/PMT 和初始元数据
+      const response = await axios.get(tsUrl, { 
+        responseType: 'arraybuffer',
+        headers: { 'Range': 'bytes=0-262143' },
+        timeout: 5000 // 5秒超时
+      });
       const buffer = Buffer.from(response.data);
       
       return this.parseTSBuffer(buffer);
