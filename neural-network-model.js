@@ -533,6 +533,34 @@ class NeuralNetworkModel {
       // 检查模型文件是否存在
       if (fs.existsSync(this.modelPath)) {
         this.model = await tf.loadLayersModel(`file://${this.modelPath}`);
+        
+        // 特征版本控制：检查输入维度
+        const loadedInputShape = this.model.inputs[0].shape[1];
+        if (loadedInputShape !== this.inputShape) {
+          logger.warn(`模型输入维度 (${loadedInputShape}) 与当前配置 (${this.inputShape}) 不匹配，重置模型。`);
+          
+          // 备份旧模型
+          try {
+            const modelDir = path.dirname(this.modelPath);
+            const modelName = path.basename(this.modelPath);
+            const backupPath = path.join(modelDir, `${modelName}.bak.${Date.now()}`);
+            
+            // 简单复制主文件，如果是 SavedModel 格式可能需要复制文件夹，
+            // 但这里 tfjs-node 保存的是 JSON + weights.bin，通常都在同一目录下。
+            // 为了简化，我们只重命名主 JSON 文件，weights 文件让它们留着（可能会有冗余，但安全）。
+            if (fs.existsSync(this.modelPath)) {
+                fs.copyFileSync(this.modelPath, backupPath);
+                logger.info(`旧模型配置已备份至: ${backupPath}`);
+            }
+          } catch (e) {
+            logger.error('备份旧模型失败', e);
+          }
+
+          this.model.dispose(); // 释放旧模型
+          this.createModel(); // 创建新模型
+          return;
+        }
+
         this.isTrained = true;
         logger.info(`模型已从 ${this.modelPath} 加载`);
         this.logModelSummary();

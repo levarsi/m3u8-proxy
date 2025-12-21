@@ -942,7 +942,38 @@ app.post('/nn-model/reset', (req, res) => {
 });
 
 // 训练数据管理
+const TRAINING_DATA_PATH = path.join(__dirname, 'data', 'nn-training-data.json');
 let trainingDataStore = [];
+
+// 加载训练数据
+function loadTrainingData() {
+  try {
+    if (fs.existsSync(TRAINING_DATA_PATH)) {
+      const data = fs.readFileSync(TRAINING_DATA_PATH, 'utf8');
+      trainingDataStore = JSON.parse(data);
+      logger.info(`已加载 ${trainingDataStore.length} 条训练数据`);
+    }
+  } catch (error) {
+    logger.error('加载训练数据失败', error);
+  }
+}
+
+// 保存训练数据
+function saveTrainingData() {
+  try {
+    const dir = path.dirname(TRAINING_DATA_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(TRAINING_DATA_PATH, JSON.stringify(trainingDataStore, null, 2));
+    logger.info('训练数据已保存');
+  } catch (error) {
+    logger.error('保存训练数据失败', error);
+  }
+}
+
+// 初始化加载
+loadTrainingData();
 
 // 获取训练数据列表
 app.get('/nn-model/training-data', (req, res) => {
@@ -976,6 +1007,7 @@ app.post('/nn-model/training-data', express.json(), (req, res) => {
     const newData = { id, ...data, createdAt: new Date().toISOString() };
     
     trainingDataStore.push(newData);
+    saveTrainingData(); // 保存数据
     
     logger.info('添加训练数据', { id });
     
@@ -990,6 +1022,47 @@ app.post('/nn-model/training-data', express.json(), (req, res) => {
       error: '添加训练数据失败',
       message: error.message
     });
+  }
+});
+
+// 反馈接口 (自动收集)
+app.post('/nn-model/feedback', express.json(), (req, res) => {
+  try {
+    const { url, isAd, features, metadata } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    // 尝试构建训练数据
+    // 如果前端传来了 features，直接使用；否则仅保存 metadata 待后续处理
+    
+    const feedbackData = {
+        url,
+        isAd: !!isAd,
+        features: features || [], 
+        metadata: metadata || {},
+        source: 'feedback'
+    };
+
+    // 生成唯一ID
+    const id = Date.now() + Math.random().toString(36).substring(2, 9);
+    const newData = { id, ...feedbackData, createdAt: new Date().toISOString() };
+    
+    trainingDataStore.push(newData);
+    saveTrainingData();
+
+    logger.info('收到用户反馈', { url, isAd });
+    
+    res.json({
+      success: true,
+      message: '反馈已接收',
+      data: newData
+    });
+
+  } catch (error) {
+    logger.error('处理反馈失败', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1008,6 +1081,7 @@ app.put('/nn-model/training-data/:id', express.json(), (req, res) => {
     }
     
     trainingDataStore[index] = { ...trainingDataStore[index], ...updates, updatedAt: new Date().toISOString() };
+    saveTrainingData(); // 保存数据
     
     logger.info('更新训练数据', { id });
     
@@ -1039,6 +1113,7 @@ app.delete('/nn-model/training-data/:id', (req, res) => {
     }
     
     trainingDataStore.splice(index, 1);
+    saveTrainingData(); // 保存数据
     
     logger.info('删除训练数据', { id });
     
@@ -1067,6 +1142,7 @@ app.delete('/nn-model/training-data/batch', express.json(), (req, res) => {
     }
     
     trainingDataStore = trainingDataStore.filter(item => !ids.includes(item.id));
+    saveTrainingData(); // 保存数据
     
     logger.info('批量删除训练数据', { count: ids.length });
     
