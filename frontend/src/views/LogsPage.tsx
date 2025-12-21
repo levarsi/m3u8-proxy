@@ -13,6 +13,10 @@ type LogItem = {
   message: string;
   timestamp: string;
   module?: string;
+  category?: string;
+  url?: string;
+  reason?: string;
+  [key: string]: any; // 允许其他元数据字段
 };
 
 type LogsResponse = {
@@ -30,6 +34,42 @@ function levelBadge(level: string) {
           ? 'bg-slate-500/20 text-slate-700 dark:text-slate-200'
           : 'bg-sky-500/15 text-sky-700 dark:text-sky-200';
   return <span className={`rounded-md px-2 py-0.5 text-xs ${cls}`}>{key}</span>;
+}
+
+// 广告过滤日志卡片
+function AdFilterLogCard({ log, onFeedback }: { log: LogItem; onFeedback: (url: string, isAd: boolean) => void }) {
+  return (
+    <div className="rounded-lg border border-rose-500/30 bg-rose-50 p-3 text-sm dark:border-rose-400/30 dark:bg-rose-950/20">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {levelBadge(log.level)}
+          <span className="text-xs font-semibold text-rose-800 dark:text-rose-200">[广告拦截]</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">{new Date(log.timestamp).toLocaleString()}</span>
+          {log.module ? <span className="text-xs text-slate-500 dark:text-slate-400">[{log.module}]</span> : null}
+        </div>
+        {log.url && (
+          <Button
+            variant="ghost"
+            className="h-6 px-2 text-xs text-rose-600 hover:bg-rose-100 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-900/40"
+            onClick={() => onFeedback(log.url!, true)}
+            title="将此片段作为广告样本加入训练集"
+          >
+            + 加入训练 (广告)
+          </Button>
+        )}
+      </div>
+      <div className="mt-2 space-y-1">
+        <div className="flex">
+          <span className="w-16 flex-shrink-0 text-xs text-slate-500">URL:</span>
+          <span className="break-all font-mono text-xs text-slate-800 dark:text-slate-200">{log.url}</span>
+        </div>
+        <div className="flex">
+          <span className="w-16 flex-shrink-0 text-xs text-slate-500">原因:</span>
+          <span className="break-all text-xs text-slate-600 dark:text-slate-300">{log.reason}</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function LogsPage() {
@@ -77,7 +117,7 @@ export function LogsPage() {
         isAd,
         source: 'log-feedback'
       });
-      toast.success(isAd ? '已标记为广告' : '已标记为正常');
+      toast.success(isAd ? '已标记为广告并加入训练集' : '已标记为正常并加入训练集');
     } catch (e: any) {
       toast.error(e?.message ?? '反馈失败');
     }
@@ -139,7 +179,13 @@ export function LogsPage() {
           ) : (
             <div className="max-h-[520px] space-y-2 overflow-auto">
               {logs.map((l, idx) => {
+                // 如果是广告过滤日志，使用专用卡片
+                if (l.category === 'AD_FILTER') {
+                  return <AdFilterLogCard key={idx} log={l} onFeedback={handleFeedback} />;
+                }
+
                 const url = extractUrlFromMessage(l.message);
+                // 默认日志卡片
                 return (
                   <div
                     key={idx}

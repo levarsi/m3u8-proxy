@@ -539,8 +539,8 @@ class M3U8Processor {
   /**
    * 记录过滤操作 - 增强版
    * @param {string} action - 操作类型
-   * @param {string} content - 内容
-   * @param {RegExp|string} pattern - 匹配的模式
+   * @param {string} content - 内容 (URL)
+   * @param {RegExp|string} pattern - 匹配的模式或依据
    */
   logFilterAction(action, content, pattern) {
     const logLevel = config.adFilter.logLevel;
@@ -548,19 +548,22 @@ class M3U8Processor {
     
     const logData = {
       action,
-      content,
-      pattern: pattern instanceof RegExp ? pattern.source : pattern,
+      url: content,
+      isAd: true,
+      category: 'AD_FILTER',
+      reason: pattern instanceof RegExp ? `Pattern: ${pattern.source}` : pattern,
       timestamp: new Date().toISOString()
     };
     
-    if (logLevel === 'debug' || config.adFilter.logFilteredSegments) {
-      logger.debug('广告过滤操作', { module: 'processor', ...logData });
-    } else if (logLevel === 'info') {
-      logger.info(`广告过滤: ${action}`, { module: 'processor' });
-    }
+    // 强制使用显著的消息头
+    const message = `[AD-FILTER][广告] 拦截片段: ${content} | 原因: ${logData.reason}`;
     
-    // 注意：统计信息在process方法中更新，这里不再重复更新
-    // 避免重复计算导致统计错误
+    if (config.adFilter.logFilteredSegments) {
+      // 如果明确要求记录过滤片段，使用 info 级别以确保可见
+      logger.info(message, { module: 'processor', ...logData });
+    } else if (logLevel === 'debug') {
+      logger.debug(message, { module: 'processor', ...logData });
+    }
   }
 
   /**
@@ -946,8 +949,17 @@ class M3U8Processor {
             this.stats.totalProcessed++;
 
             if (result && result.isAd) {
-                // 广告片段，记录并跳过 (连同绑定的 bufferTags 一起跳过)
+                // 广告片段，记录并以注释形式保留在文件中
                 this.stats.adsFiltered++;
+                
+                // 添加注释行，让用户在查看M3U8内容时能看到被过滤的URL
+                // 格式: # EXT-X-AD-FILTERED: URL | Reason: ...
+                const adReason = result.fusionResult ? 
+                    `[${Object.keys(result.fusionResult.sources).filter(k => result.fusionResult.sources[k].isAd).join('+')}]` : 
+                    'Detected';
+                
+                processedLines.push(`# EXT-X-AD-FILTERED: ${entry.line} | Reason: ${adReason} | Conf: ${result.confidence.toFixed(2)}`);
+
                 filteredSegments.push({
                     url: entry.line,
                     duration: entry.duration,
@@ -980,6 +992,13 @@ class M3U8Processor {
             
             if (result && result.isAd) {
                 this.stats.adsFiltered++;
+                
+                // 同样以注释形式保留被过滤的标签
+                const adReason = result.fusionResult ? 
+                    `[${Object.keys(result.fusionResult.sources).filter(k => result.fusionResult.sources[k].isAd).join('+')}]` : 
+                    'Detected';
+                processedLines.push(`# EXT-X-AD-FILTERED-TAG: ${entry.line} | Reason: ${adReason}`);
+                
                 filteredSegments.push({
                     url: entry.uri,
                     reason: 'advertisement in tag',

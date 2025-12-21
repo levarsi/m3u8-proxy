@@ -255,6 +255,8 @@ class NeuralNetworkModel {
       // 准备训练数据
       const { features, labels } = this.prepareTrainingData(trainingData);
       
+      let bestValAccuracy = 0;
+
       // 添加训练回调
       const callbacks = [
         tf.callbacks.earlyStopping({
@@ -262,14 +264,8 @@ class NeuralNetworkModel {
           patience: 5,
           minDelta: 0.001
         }),
-        tf.callbacks.ModelCheckpoint({
-          filepath: `${this.checkpointPath}/model-{epoch:02d}-{val_accuracy:.4f}`,
-          monitor: 'val_accuracy',
-          saveBestOnly: true,
-          saveWeightsOnly: false
-        }),
-        {
-          onEpochEnd: (epoch, logs) => {
+        new tf.CustomCallback({
+          onEpochEnd: async (epoch, logs) => {
             // 更新训练状态
             this.trainingStatus = {
               ...this.trainingStatus,
@@ -287,8 +283,28 @@ class NeuralNetworkModel {
               valLoss: logs.val_loss,
               valAccuracy: logs.val_accuracy
             });
+
+            // 自定义 ModelCheckpoint 逻辑：保存最佳模型
+            const currentValAcc = logs.val_accuracy || 0;
+            // 只有当验证准确率有效且提升时才保存
+            if (currentValAcc > bestValAccuracy && currentValAcc > 0) {
+              bestValAccuracy = currentValAcc;
+              try {
+                // 确保目录存在
+                if (!fs.existsSync(this.checkpointPath)) {
+                  fs.mkdirSync(this.checkpointPath, { recursive: true });
+                }
+                // 保存模型
+                // 注意：在 Windows 上 file:// 路径可能需要特殊处理，但 tfjs-node 通常处理得很好
+                const savePath = `file://${path.join(this.checkpointPath, 'best-model').replace(/\\/g, '/')}`;
+                await this.model.save(savePath);
+                logger.debug(`保存最佳模型 (val_accuracy: ${bestValAccuracy.toFixed(4)})`);
+              } catch (err) {
+                logger.error('保存最佳模型失败', err);
+              }
+            }
           }
-        },
+        }),
         ...this.trainConfig.callbacks
       ];
       
@@ -314,23 +330,29 @@ class NeuralNetworkModel {
         status: 'completed'
       };
       
+      // 安全地获取历史数据的辅助函数
+      const getLastMetric = (metricName) => {
+        const metrics = history.history[metricName];
+        return (metrics && metrics.length > 0) ? metrics[metrics.length - 1] : 0;
+      };
+
       // 保存训练历史
       const trainingResult = {
         id: Date.now().toString(),
         startTime: this.trainingStatus.startTime,
         endTime: endTime,
         duration: endTime - this.trainingStatus.startTime,
-        epochs: history.epochs.length,
-        finalLoss: history.history.loss[history.history.loss.length - 1],
-        finalAccuracy: history.history.accuracy[history.history.accuracy.length - 1],
-        finalValLoss: history.history.val_loss[history.history.val_loss.length - 1],
-        finalValAccuracy: history.history.val_accuracy[history.history.val_accuracy.length - 1],
-        history: history.history
+        epochs: (history.epochs || []).length,
+        finalLoss: getLastMetric('loss'),
+        finalAccuracy: getLastMetric('accuracy'),
+        finalValLoss: getLastMetric('val_loss'),
+        finalValAccuracy: getLastMetric('val_accuracy'),
+        history: history.history || {}
       };
       this.trainingHistory.push(trainingResult);
       
       logger.info('模型训练完成', {
-        epochs: history.epochs.length,
+        epochs: trainingResult.epochs,
         finalLoss: trainingResult.finalLoss,
         finalAccuracy: trainingResult.finalAccuracy,
         finalValLoss: trainingResult.finalValLoss,
@@ -506,7 +528,8 @@ class NeuralNetworkModel {
   }
   
   /**
-   * 保存模型到文件
+   * 保存模型到文件 (自定义JSON序列化 V2)
+   * 使用 tf.io.browser.fromMemory 的逆操作，保存完整的 artifacts
    */
   async saveModel() {
     if (!this.model) {
@@ -520,9 +543,51 @@ class NeuralNetworkModel {
         fs.mkdirSync(modelDir, { recursive: true });
       }
       
-      // 保存模型
-      await this.model.save(`file://${this.modelPath}`);
-      logger.info(`模型已保存到: ${this.modelPath}`);
+      let artifactsToSave = null;
+      
+      // 自定义 IOHandler 捕获 artifacts
+      const customSaver = {
+        save: async (modelArtifacts) => {
+          artifactsToSave = modelArtifacts;
+          return {
+            modelArtifactsInfo: {
+              dateSaved: new Date(),
+              modelTopologyType: 'JSON',
+            }
+          };
+        }
+      };
+      
+      // 触发保存以获取 artifacts
+      await this.model.save(customSaver);
+      
+      if (!artifactsToSave) {
+        throw new Error('模型导出失败: 未获取到 artifacts');
+      }
+      
+      // 处理权重数据 (ArrayBuffer -> Base64)
+      let weightDataStr = null;
+      if (artifactsToSave.weightData) {
+        weightDataStr = Buffer.from(artifactsToSave.weightData).toString('base64');
+      }
+      
+      // 构造保存数据
+      const saveData = {
+        format: 'm3u8-proxy-nn-v2', // 升级版本号
+        meta: {
+          savedAt: new Date().toISOString(),
+          inputShape: this.inputShape,
+          outputShape: this.outputShape,
+          version: '1.0.0'
+        },
+        modelTopology: artifactsToSave.modelTopology,
+        weightSpecs: artifactsToSave.weightSpecs,
+        weightData: weightDataStr
+      };
+      
+      // 写入文件
+      fs.writeFileSync(this.modelPath, JSON.stringify(saveData)); // 不使用 pretty print 以节省空间
+      logger.info(`模型已保存到: ${this.modelPath} (自定义JSON格式 V2)`);
       
     } catch (error) {
       logger.error('模型保存失败', error);
@@ -537,38 +602,69 @@ class NeuralNetworkModel {
     try {
       // 检查模型文件是否存在
       if (fs.existsSync(this.modelPath)) {
-        this.model = await tf.loadLayersModel(`file://${this.modelPath}`);
+        logger.info(`正在加载模型: ${this.modelPath}`);
         
-        // 特征版本控制：检查输入维度
-        const loadedInputShape = this.model.inputs[0].shape[1];
-        if (loadedInputShape !== this.inputShape) {
-          logger.warn(`模型输入维度 (${loadedInputShape}) 与当前配置 (${this.inputShape}) 不匹配，重置模型。`);
+        try {
+          // 读取并解析文件
+          const fileContent = fs.readFileSync(this.modelPath, 'utf8');
+          const modelData = JSON.parse(fileContent);
           
-          // 备份旧模型
-          try {
-            const modelDir = path.dirname(this.modelPath);
-            const modelName = path.basename(this.modelPath);
-            const backupPath = path.join(modelDir, `${modelName}.bak.${Date.now()}`);
-            
-            // 简单复制主文件，如果是 SavedModel 格式可能需要复制文件夹，
-            // 但这里 tfjs-node 保存的是 JSON + weights.bin，通常都在同一目录下。
-            // 为了简化，我们只重命名主 JSON 文件，weights 文件让它们留着（可能会有冗余，但安全）。
-            if (fs.existsSync(this.modelPath)) {
-                fs.copyFileSync(this.modelPath, backupPath);
-                logger.info(`旧模型配置已备份至: ${backupPath}`);
+          // 检查 V2 格式 (推荐)
+          if (modelData.format === 'm3u8-proxy-nn-v2' && modelData.modelTopology) {
+             // 1. 验证特征维度
+            const loadedInputShape = modelData.meta?.inputShape;
+            if (loadedInputShape && loadedInputShape !== this.inputShape) {
+              logger.warn(`模型输入维度 (${loadedInputShape}) 与当前配置 (${this.inputShape}) 不匹配，重置模型。`);
+              this.backupAndResetModel();
+              return;
             }
-          } catch (e) {
-            logger.error('备份旧模型失败', e);
-          }
 
-          this.model.dispose(); // 释放旧模型
-          this.createModel(); // 创建新模型
-          return;
+            // 2. 还原 weightData (Base64 -> ArrayBuffer)
+            let weightData = null;
+            if (modelData.weightData) {
+              const buffer = Buffer.from(modelData.weightData, 'base64');
+              // 转换为 Uint8Array 再取 buffer，确保兼容性
+              weightData = new Uint8Array(buffer).buffer; 
+            }
+
+            // 3. 使用 tf.io.fromMemory 加载
+            // 这是最标准的方式，完全还原模型状态
+            this.model = await tf.loadLayersModel(tf.io.fromMemory({
+              modelTopology: modelData.modelTopology,
+              weightSpecs: modelData.weightSpecs,
+              weightData: weightData
+            }));
+            
+            this.isTrained = true;
+            logger.info(`模型已成功加载 (自定义JSON格式 V2)`);
+            this.logModelSummary();
+
+          } 
+          // 检查 V1 格式 (之前尝试的格式，保留兼容性)
+          else if (modelData.format === 'm3u8-proxy-nn-v1' && modelData.weights) {
+             // ... V1 加载逻辑 (如果需要可以保留，或者直接建议升级)
+             logger.warn('检测到旧版V1模型格式，尝试转换加载...');
+             this.model = await tf.models.modelFromJSON(modelData.modelTopology);
+             const weightTensors = modelData.weights.map(w => tf.tensor(w));
+             this.model.setWeights(weightTensors);
+             weightTensors.forEach(t => t.dispose());
+             this.isTrained = true;
+             this.logModelSummary();
+          }
+          else {
+             // 尝试标准加载方式 (针对 file:// 协议)
+             throw new Error('未知的文件格式');
+          }
+          
+        } catch (parseError) {
+          logger.warn(`自定义加载失败 (${parseError.message})，尝试标准 file:// 加载...`);
+          // 规范化路径以支持Windows
+          const normalizedPath = this.modelPath.replace(/\\/g, '/');
+          this.model = await tf.loadLayersModel(`file://${normalizedPath}`);
+          this.isTrained = true;
+          this.logModelSummary();
         }
 
-        this.isTrained = true;
-        logger.info(`模型已从 ${this.modelPath} 加载`);
-        this.logModelSummary();
       } else {
         throw new Error('模型文件不存在');
       }
@@ -576,6 +672,29 @@ class NeuralNetworkModel {
       logger.error('模型加载失败', error);
       throw error;
     }
+  }
+
+  /**
+   * 备份并重置模型的辅助方法
+   */
+  backupAndResetModel() {
+    try {
+      const modelDir = path.dirname(this.modelPath);
+      const modelName = path.basename(this.modelPath);
+      const backupPath = path.join(modelDir, `${modelName}.bak.${Date.now()}`);
+      
+      if (fs.existsSync(this.modelPath)) {
+          fs.copyFileSync(this.modelPath, backupPath);
+          logger.info(`旧模型配置已备份至: ${backupPath}`);
+      }
+    } catch (e) {
+      logger.error('备份旧模型失败', e);
+    }
+
+    if (this.model) {
+      this.model.dispose();
+    }
+    this.createModel();
   }
   
   /**
