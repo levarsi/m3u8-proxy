@@ -264,9 +264,12 @@ class M3U8Processor {
       
       const nnInfo = this.enableNNDetection ? `_NN_${nnResult.probability.toFixed(2)}` : '';
       
+      // 使用解析后的完整 URL 记录日志
+      const resolvedUrl = this.resolveUrl(line);
+      
       this.logFilterAction(
         '多源融合+神经网络广告拦截', 
-        line, 
+        resolvedUrl, 
         `FUSION${nnInfo}_${sourceInfo}_${finalConfidence.toFixed(2)}`
       );
     }
@@ -947,6 +950,7 @@ class M3U8Processor {
         } else if (entry.type === 'segment') {
             const result = detectionResults.get(entry);
             this.stats.totalProcessed++;
+            const resolvedUrl = this.resolveUrl(entry.line);
 
             if (result && result.isAd) {
                 // 广告片段，记录并以注释形式保留在文件中
@@ -958,10 +962,10 @@ class M3U8Processor {
                     `[${Object.keys(result.fusionResult.sources).filter(k => result.fusionResult.sources[k].isAd).join('+')}]` : 
                     'Detected';
                 
-                processedLines.push(`# EXT-X-AD-FILTERED: ${entry.line} | Reason: ${adReason} | Conf: ${result.confidence.toFixed(2)}`);
+                processedLines.push(`# EXT-X-AD-FILTERED: ${resolvedUrl} | Reason: ${adReason} | Conf: ${result.confidence.toFixed(2)}`);
 
                 filteredSegments.push({
-                    url: entry.line,
+                    url: resolvedUrl,
                     duration: entry.duration,
                     reason: 'advertisement',
                     confidence: result.confidence,
@@ -974,7 +978,6 @@ class M3U8Processor {
                 }
                 
                 // 路径重写
-                const resolvedUrl = this.resolveUrl(entry.line);
                 processedLines.push(resolvedUrl);
                 this.stats.segmentsKept++;
 
@@ -989,6 +992,7 @@ class M3U8Processor {
         } else if (entry.type === 'tag_with_uri') {
             const result = detectionResults.get(entry);
             this.stats.totalProcessed++;
+            const resolvedUrl = this.resolveUrl(entry.uri);
             
             if (result && result.isAd) {
                 this.stats.adsFiltered++;
@@ -997,10 +1001,10 @@ class M3U8Processor {
                 const adReason = result.fusionResult ? 
                     `[${Object.keys(result.fusionResult.sources).filter(k => result.fusionResult.sources[k].isAd).join('+')}]` : 
                     'Detected';
-                processedLines.push(`# EXT-X-AD-FILTERED-TAG: ${entry.line} | Reason: ${adReason}`);
+                processedLines.push(`# EXT-X-AD-FILTERED-TAG: ${resolvedUrl} | Reason: ${adReason}`);
                 
                 filteredSegments.push({
-                    url: entry.uri,
+                    url: resolvedUrl,
                     reason: 'advertisement in tag',
                     confidence: result.confidence,
                     fusionResult: result.fusionResult

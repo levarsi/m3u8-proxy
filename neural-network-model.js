@@ -331,8 +331,8 @@ class NeuralNetworkModel {
       };
       
       // 安全地获取历史数据的辅助函数
-      const getLastMetric = (metricName) => {
-        const metrics = history.history[metricName];
+      const getLastMetric = (metricName, altName) => {
+        const metrics = history.history[metricName] || (altName ? history.history[altName] : null);
         return (metrics && metrics.length > 0) ? metrics[metrics.length - 1] : 0;
       };
 
@@ -342,11 +342,11 @@ class NeuralNetworkModel {
         startTime: this.trainingStatus.startTime,
         endTime: endTime,
         duration: endTime - this.trainingStatus.startTime,
-        epochs: (history.epochs || []).length,
+        epochs: (history.epoch || []).length,
         finalLoss: getLastMetric('loss'),
-        finalAccuracy: getLastMetric('accuracy'),
+        finalAccuracy: getLastMetric('accuracy', 'acc'),
         finalValLoss: getLastMetric('val_loss'),
-        finalValAccuracy: getLastMetric('val_accuracy'),
+        finalValAccuracy: getLastMetric('val_accuracy', 'val_acc'),
         history: history.history || {}
       };
       this.trainingHistory.push(trainingResult);
