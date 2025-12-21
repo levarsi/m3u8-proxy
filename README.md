@@ -116,9 +116,6 @@ CORS_ENABLED=true                  # 启用 CORS
 CORS_ORIGIN=*                      # 允许的源
 ```
 
-### 详细配置文件
-编辑 `config.js` 进行详细配置：
-
 ### 3. 访问与登录
 - **管理后台**: `http://localhost:3000`
 - **默认账号**: `admin`
