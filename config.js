@@ -19,6 +19,7 @@ module.exports = {
       /advert/i,
       /commercial/i,
       /sponsor/i,
+      /adjump/i,
       /_ad\./i,
       /\.ad\./i,
       /advertisement/i,

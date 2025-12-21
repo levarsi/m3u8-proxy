@@ -146,7 +146,7 @@ class M3U8Processor {
   containsAdKeywords(line) {
     // 仅检查基本的广告关键词，避免过于激进的检测
     const adKeywords = [
-      'ad_', 'advertisement', 'commercial'
+      'ad_', 'advertisement', 'commercial', 'adjump'
     ];
     
     return adKeywords.some(keyword => 
