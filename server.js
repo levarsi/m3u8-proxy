@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const fs = require('fs');
 const config = require('./config');
 const M3U8Processor = require('./m3u8-processor');
 const CacheManager = require('./cache-manager');

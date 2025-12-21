@@ -65,6 +65,24 @@ export function LogsPage() {
     }
   }
 
+  function extractUrlFromMessage(message: string): string | null {
+    const match = message.match(/https?:\/\/[^\s"',]+/);
+    return match ? match[0] : null;
+  }
+
+  async function handleFeedback(url: string, isAd: boolean) {
+    try {
+      await http.post('/nn-model/feedback', {
+        url,
+        isAd,
+        source: 'log-feedback'
+      });
+      toast.success(isAd ? '已标记为广告' : '已标记为正常');
+    } catch (e: any) {
+      toast.error(e?.message ?? '反馈失败');
+    }
+  }
+
   const logs = logsQuery.data?.logs ?? [];
 
   return (
@@ -120,19 +138,41 @@ export function LogsPage() {
             <EmptyState title="暂无日志" />
           ) : (
             <div className="max-h-[520px] space-y-2 overflow-auto">
-              {logs.map((l, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-lg border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-slate-950/30"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    {levelBadge(l.level)}
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{new Date(l.timestamp).toLocaleString()}</span>
-                    {l.module ? <span className="text-xs text-slate-500 dark:text-slate-400">[{l.module}]</span> : null}
+              {logs.map((l, idx) => {
+                const url = extractUrlFromMessage(l.message);
+                return (
+                  <div
+                    key={idx}
+                    className="rounded-lg border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-slate-950/30"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      {levelBadge(l.level)}
+                      <span className="text-xs text-slate-500 dark:text-slate-400">{new Date(l.timestamp).toLocaleString()}</span>
+                      {l.module ? <span className="text-xs text-slate-500 dark:text-slate-400">[{l.module}]</span> : null}
+                    </div>
+                    <div className="mt-2 whitespace-pre-wrap text-slate-900 dark:text-slate-100">{l.message}</div>
+                    
+                    {url && (
+                      <div className="mt-2 flex gap-2 pt-2 border-t border-slate-100 dark:border-white/5">
+                        <Button
+                          variant="ghost"
+                          className="h-6 px-2 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-900/20"
+                          onClick={() => handleFeedback(url, true)}
+                        >
+                          标记为广告
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="h-6 px-2 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                          onClick={() => handleFeedback(url, false)}
+                        >
+                          标记为正常
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-2 whitespace-pre-wrap text-slate-900 dark:text-slate-100">{l.message}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Panel>

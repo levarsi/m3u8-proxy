@@ -60,10 +60,15 @@ class NeuralNetworkModel {
    * 初始化模型
    */
   async init() {
-    try {
-      // 尝试加载已保存的模型
-      await this.loadModel();
-    } catch (error) {
+    // 检查模型文件是否存在，避免在首次启动时抛出错误
+    if (fs.existsSync(this.modelPath)) {
+      try {
+        await this.loadModel();
+      } catch (error) {
+        logger.error('加载已有模型失败，将创建新模型', error);
+        this.createModel();
+      }
+    } else {
       logger.info('未找到已保存的模型，将创建新模型');
       this.createModel();
     }
