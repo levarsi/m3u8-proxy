@@ -27,6 +27,23 @@ class M3U8Processor {
     // 初始化多源数据融合引擎
     this.fusionEngine = new MultiSourceFusion(options.fusionEngine || {});
     
+    // 调整融合引擎配置
+    this.fusionEngine.updateFusionConfig({
+      decisionThreshold: 0.4, // 降低决策阈值
+      minSources: 1,         // 降低最小检测源数量要求
+      enableHardRules: false // 禁用硬规则
+    });
+    
+    // 调整检测源权重
+    this.fusionEngine.updateSourceWeights({
+      patternMatching: 0.6,  // 大幅增加模式匹配的权重
+      structuralAnalysis: 0.1,
+      durationAnalysis: 0.1,
+      tsContentAnalysis: 0.0, // TS检测已禁用
+      networkAnalysis: 0.1,
+      playlistContext: 0.1
+    });
+    
     // 初始化神经网络模型
     this.nnModel = new NeuralNetworkModel(options.nnModel || {});
     
@@ -82,17 +99,26 @@ class M3U8Processor {
     // 1. 模式匹配检测
     let patternMatchResult = false;
     let matchedPattern = null;
-    for (const pattern of this.adPatterns) {
-      if (pattern.test(line)) {
-        patternMatchResult = true;
-        matchedPattern = pattern;
-        break;
+    
+    // 特别处理main-audio.m3u8，避免误判
+    if (!line.toLowerCase().includes('main-audio')) {
+      for (const pattern of this.adPatterns) {
+        if (pattern.test(line)) {
+          patternMatchResult = true;
+          matchedPattern = pattern;
+          break;
+        }
       }
     }
+    
+    // 2. 广告关键词检测（直接检查，不依赖其他条件）
+    const hasAdKeywords = this.containsAdKeywords(line);
+    
     detectionResults.patternMatching = {
-      isAd: patternMatchResult,
-      confidence: patternMatchResult ? 0.8 : 0,
-      matchedPattern: matchedPattern ? matchedPattern.source : null
+      isAd: patternMatchResult || hasAdKeywords,
+      confidence: (patternMatchResult ? 0.8 : 0) + (hasAdKeywords ? 0.7 : 0),
+      matchedPattern: matchedPattern ? matchedPattern.source : null,
+      hasAdKeywords: hasAdKeywords
     };
     
     // 2. 结构化广告检测
@@ -322,16 +348,23 @@ class M3U8Processor {
       // 检测广告关键词
       const adKeywords = [
         'ad_', 'advertisement', 'commercial', 'adjump', 'adserver',
-        'banner', 'promo', 'sponsor', 'marketing', 'affiliate'
+        'banner', 'promo', 'sponsor', 'marketing', 'affiliate',
+        'ad-', 'ad_segment', 'ad-audio', 'ad-video'
       ];
       
       const urlLower = line.toLowerCase();
-      const hasAdKeywords = adKeywords.some(keyword => urlLower.includes(keyword));
-      result.features.hasAdKeywords = hasAdKeywords;
       
-      if (hasAdKeywords) {
-        result.patterns.push('AD_KEYWORDS_IN_URL');
-        result.confidence += 0.3;
+      // 特别处理main-audio.m3u8，避免误判
+      if (urlLower.includes('main-audio')) {
+        result.features.hasAdKeywords = false;
+      } else {
+        const hasAdKeywords = adKeywords.some(keyword => urlLower.includes(keyword));
+        result.features.hasAdKeywords = hasAdKeywords;
+        
+        if (hasAdKeywords) {
+          result.patterns.push('AD_KEYWORDS_IN_URL');
+          result.confidence += 0.3;
+        }
       }
       
       // 检测是否为第三方域名（与基础URL比较）
@@ -403,14 +436,21 @@ class M3U8Processor {
    * @returns {boolean} 是否包含广告关键词
    */
   containsAdKeywords(line) {
-    // 仅检查基本的广告关键词，避免过于激进的检测
+    // 检查广告关键词，确保能识别常见的广告URL格式
     const adKeywords = [
-      'ad_', 'advertisement', 'commercial', 'adjump'
+      'ad_', 'advertisement', 'commercial', 'adjump',
+      'ad-', 'ad_segment', 'ad-audio', 'ad-video'
     ];
     
-    return adKeywords.some(keyword => 
-      line.toLowerCase().includes(keyword.toLowerCase())
-    );
+    const lowerLine = line.toLowerCase();
+    
+    // 特别处理main-audio.m3u8，避免误判
+    if (lowerLine.includes('main-audio')) {
+      return false;
+    }
+    
+    // 检查是否包含广告关键词
+    return adKeywords.some(keyword => lowerLine.includes(keyword));
   }
 
   /**
@@ -527,7 +567,6 @@ class M3U8Processor {
            line.startsWith('#EXT-X-MEDIA-SEQUENCE') ||
            line.startsWith('#EXT-X-ALLOW-CACHE') ||
            line.startsWith('#EXT-X-ENDLIST') ||
-           line.startsWith('#EXT-X-STREAM-INF') ||
            line.startsWith('#EXT-X-DISCONTINUITY') ||
            line.startsWith('#EXT-X-KEY');
   }
@@ -800,18 +839,46 @@ class M3U8Processor {
 
       // 处理标签行
       if (line.startsWith('#')) {
-        // 全局标签直接写入
-        if (this.isGlobalTag(line)) {
-          // 如果缓存里还有标签，先写入
-          if (bufferTags.length > 0) {
-            processedLines.push(...bufferTags);
-            bufferTags = [];
+        // 检查是否是包含URI的标签
+        if (line.startsWith('#EXT-X-MEDIA:') || line.startsWith('#EXT-X-STREAM-INF:')) {
+          // 提取URI属性
+          const uriMatch = line.match(/URI=["']?([^"'\s,]+)["']?/i);
+          if (uriMatch) {
+            const uri = uriMatch[1];
+            this.stats.totalProcessed++;
+            const adResult = await this.isAdvertisement(uri, null, segmentIndex);
+            const isAd = adResult.isAd;
+
+            if (isAd) {
+              // 广告片段，记录并跳过该标签
+              filteredSegments.push({
+                url: uri,
+                duration: null,
+                reason: 'advertisement',
+                confidence: adResult.confidence,
+                fusionResult: adResult.fusionResult
+              });
+              this.stats.adsFiltered++;
+              // 清空bufferTags，避免误写入
+              bufferTags = [];
+              // 跳过该标签及其对应的URL行（如果有的话）
+              if (i + 1 < lines.length && !lines[i + 1].trim().startsWith('#')) {
+                i++; // 跳过下一行的URL
+              }
+              continue;
+            }
           }
-          processedLines.push(line);
-        } else {
-          // 切片相关标签缓存等待判断
-          bufferTags.push(line);
         }
+
+        // 处理非广告标签
+        // 先清空缓存的标签
+        if (bufferTags.length > 0) {
+          processedLines.push(...bufferTags);
+          bufferTags = [];
+        }
+        
+        // 写入当前标签
+        processedLines.push(line);
       } else {
         // 处理文件路径/URL行
         this.stats.totalProcessed++;

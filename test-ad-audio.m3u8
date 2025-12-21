@@ -1,0 +1,28 @@
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:10
+#EXT-X-MEDIA-SEQUENCE:0
+
+# Audio track definitions
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="English",LANGUAGE="en",AUTOSELECT=YES,DEFAULT=YES,URI="audio/main-audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Advertisement",LANGUAGE="en",AUTOSELECT=NO,DEFAULT=NO,URI="audio/ad-audio.m3u8"
+
+# Video streams
+#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,AUDIO="audio"
+video/main-video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=1200000,RESOLUTION=1280x720,AUDIO="audio"
+video/high-quality-video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=480x270,AUDIO="audio"
+ad-video.m3u8
+
+# Individual segments with ad indicators
+#EXTINF:10.000,
+main-segment-1.ts
+#EXTINF:10.000,
+main-segment-2.ts
+#EXTINF:10.000,
+ad_segment-1.mp4
+#EXTINF:10.000,
+ad_segment-2.mp4
+#EXTINF:10.000,
+main-segment-3.ts
