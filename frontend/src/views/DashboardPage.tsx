@@ -40,6 +40,44 @@ type TsDetectorStats = {
   processor?: { accuracy?: number };
 };
 
+type NNModelStats = {
+  enabled?: boolean;
+  model?: {
+    isTrained?: boolean;
+    inputShape?: number;
+    outputShape?: number;
+    stats?: {
+      totalTrainingSessions?: number;
+      totalPredictions?: number;
+      correctPredictions?: number;
+      trainingTime?: number;
+      predictionTime?: number;
+      modelSize?: number;
+    };
+  };
+  stats?: {
+    processor?: {
+      totalPredictions?: number;
+      avgPredictionTime?: number;
+      nnAdsDetected?: number;
+    };
+    model?: {
+      totalTrainingSessions?: number;
+      totalPredictions?: number;
+      correctPredictions?: number;
+      trainingTime?: number;
+      predictionTime?: number;
+      modelSize?: number;
+    };
+  };
+  config?: {
+    epochs?: number;
+    batchSize?: number;
+    learningRate?: number;
+    validationSplit?: number;
+  };
+};
+
 type LogsResponse = {
   logs?: Array<{ level: string; message: string; timestamp: string; module?: string }>;
 };
@@ -70,6 +108,15 @@ export function DashboardPage() {
       return data;
     },
     refetchInterval: 3000
+  });
+
+  const nnModelQuery = useQuery({
+    queryKey: ['nnModelStats'],
+    queryFn: async () => {
+      const { data } = await http.get<NNModelStats>('/nn-model/stats');
+      return data;
+    },
+    refetchInterval: 5000
   });
 
   const stats = statsQuery.data;
@@ -148,6 +195,19 @@ export function DashboardPage() {
           value={`${Number(avg).toFixed(2)}ms`}
           hint={`处理片段 ${safeNumber(seg).toLocaleString()}`}
           icon={Zap}
+        />
+        {/* 新增：神经网络模型统计 */}
+        <StatCard
+          title="NN 模型预测数"
+          value={safeNumber(nnModelQuery.data?.stats?.processor?.totalPredictions).toLocaleString()}
+          hint={`平均耗时 ${Number(nnModelQuery.data?.stats?.processor?.avgPredictionTime || 0).toFixed(2)}ms`}
+          icon={Target}
+        />
+        <StatCard
+          title="NN 检测广告"
+          value={safeNumber(nnModelQuery.data?.stats?.processor?.nnAdsDetected).toLocaleString()}
+          hint={nnModelQuery.data?.enabled ? '模型已启用' : '模型已禁用'}
+          icon={ShieldCheck}
         />
       </div>
 
@@ -230,6 +290,43 @@ export function DashboardPage() {
               <div className="flex items-center justify-between">
                 <span className="text-slate-600 dark:text-slate-400">缓存命中</span>
                 <span>{tsQuery.data?.detector?.cacheHits ?? 0}</span>
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        <Panel title="神经网络模型统计">
+          {nnModelQuery.isLoading ? (
+            <LoadingState />
+          ) : (
+            <div className="space-y-2 text-sm text-slate-900 dark:text-slate-200">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-400">模型状态</span>
+                <span>{nnModelQuery.data?.enabled ? '启用' : '禁用'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-400">训练状态</span>
+                <span>{nnModelQuery.data?.model?.isTrained ? '已训练' : '未训练'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-400">总预测数</span>
+                <span>{safeNumber(nnModelQuery.data?.stats?.processor?.totalPredictions ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-400">NN 检测广告</span>
+                <span>{safeNumber(nnModelQuery.data?.stats?.processor?.nnAdsDetected ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-400">平均预测时间</span>
+                <span>{Number(nnModelQuery.data?.stats?.processor?.avgPredictionTime || 0).toFixed(2)}ms</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-400">训练会话数</span>
+                <span>{safeNumber(nnModelQuery.data?.model?.stats?.totalTrainingSessions ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-400">模型大小</span>
+                <span>{nnModelQuery.data?.model?.stats?.modelSize ? `${(nnModelQuery.data.model.stats.modelSize / 1024).toFixed(2)} KB` : '-'} </span>
               </div>
             </div>
           )}

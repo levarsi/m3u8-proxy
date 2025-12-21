@@ -753,6 +753,71 @@ app.post('/ts-detector/config', express.json(), (req, res) => {
 });
 
 // ==========================================
+// 14. 神经网络模型管理接口
+// ==========================================
+app.get('/nn-model/stats', (req, res) => {
+  try {
+    // 检查 M3U8Processor 是否有 nnModel 属性
+    if (!m3u8Processor.nnModel) {
+      return res.json({
+        enabled: false,
+        error: '神经网络模型未初始化'
+      });
+    }
+    
+    const modelInfo = m3u8Processor.nnModel.getModelInfo();
+    const processorStats = m3u8Processor.stats.nnDetectionStats || {};
+    
+    res.json({
+      enabled: config.adFilter.enableNNDetection !== false,
+      model: modelInfo,
+      stats: {
+        processor: processorStats,
+        model: modelInfo.stats
+      },
+      config: modelInfo.trainConfig
+    });
+  } catch (error) {
+    logger.error('获取神经网络模型统计失败', error);
+    res.status(500).json({
+      error: '获取神经网络模型统计失败',
+      message: error.message
+    });
+  }
+});
+
+app.get('/nn-model/config', (req, res) => {
+  res.json({
+    enabled: config.adFilter.enableNNDetection !== false
+  });
+});
+
+app.post('/nn-model/config', express.json(), (req, res) => {
+  try {
+    const newConfig = req.body;
+    if (newConfig.enabled !== undefined) {
+      config.adFilter.enableNNDetection = newConfig.enabled;
+    }
+    
+    logger.info('更新神经网络模型配置', { newConfig });
+    
+    res.json({
+      success: true,
+      message: '配置已更新',
+      config: {
+        enabled: config.adFilter.enableNNDetection
+      }
+    });
+  } catch (error) {
+    logger.error('更新神经网络模型配置失败', error);
+    res.status(400).json({
+      error: '配置更新失败',
+      message: error.message
+    });
+  }
+});
+
+// ==========================================
 // 13. 清除日志接口
 // ==========================================
 app.delete('/logs', (req, res) => {

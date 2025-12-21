@@ -3,6 +3,8 @@ const axios = require('axios');
 const config = require('./config');
 const logger = require('./logger');
 const TSMetadataDetector = require('./ts-metadata-detector');
+const MultiSourceFusion = require('./multi-source-fusion');
+const NeuralNetworkModel = require('./neural-network-model');
 
 /**
  * M3U8处理器类 - 增强版
@@ -22,6 +24,15 @@ class M3U8Processor {
     // 初始化TS元数据检测器
     this.tsDetector = new TSMetadataDetector(options.tsDetector || {});
     
+    // 初始化多源数据融合引擎
+    this.fusionEngine = new MultiSourceFusion(options.fusionEngine || {});
+    
+    // 初始化神经网络模型
+    this.nnModel = new NeuralNetworkModel(options.nnModel || {});
+    
+    // 配置是否启用神经网络检测
+    this.enableNNDetection = config.adFilter.enableNNDetection !== false;
+    
     // 配置是否启用TS内容检测
     this.enableTSDetection = config.adFilter.enableTSDetection !== false;
     
@@ -34,49 +45,183 @@ class M3U8Processor {
         totalAnalyzed: 0,
         adsDetectedByTS: 0,
         tsAnalysisTime: 0
+      },
+      fusionStats: {
+        totalDecisions: 0,
+        adsDetected: 0,
+        nonAdsDetected: 0,
+        fusionTime: 0
+      },
+      nnDetectionStats: {
+        totalPredictions: 0,
+        avgPredictionTime: 0,
+        nnAdsDetected: 0
       }
     };
   }
 
   /**
-   * 检测是否为广告片段 - 增强版（集成TS检测）
+   * 检测是否为广告片段 - 增强版（集成多源数据融合）
    * @param {string} line - M3U8行内容
    * @param {number} currentDuration - 当前片段时长
-   * @returns {Promise<boolean>} 是否为广告
+   * @param {number} segmentIndex - 当前片段索引
+   * @returns {Promise<object>} 广告检测结果
    */
-  async isAdvertisement(line, currentDuration = null) {
-    if (!this.isAdFilterEnabled) return false;
+  async isAdvertisement(line, currentDuration = null, segmentIndex = 0) {
+    if (!this.isAdFilterEnabled) {
+      return {
+        isAd: false,
+        confidence: 0,
+        fusionResult: null
+      };
+    }
     
-    // 基础关键词检测
+    // 收集各检测源的结果
+    const detectionResults = {};
+    
+    // 1. 模式匹配检测
+    let patternMatchResult = false;
+    let matchedPattern = null;
     for (const pattern of this.adPatterns) {
       if (pattern.test(line)) {
-        this.logFilterAction('拦截广告', line, pattern);
-        return true;
+        patternMatchResult = true;
+        matchedPattern = pattern;
+        break;
       }
     }
+    detectionResults.patternMatching = {
+      isAd: patternMatchResult,
+      confidence: patternMatchResult ? 0.8 : 0,
+      matchedPattern: matchedPattern ? matchedPattern.source : null
+    };
     
-    // 高级检测：基于URL结构的广告检测
-    if (this.isStructuralAd(line)) {
-      this.logFilterAction('结构化广告拦截', line, 'STRUCTURAL');
-      return true;
-    }
+    // 2. 结构化广告检测
+    const structuralResult = this.isStructuralAd(line);
+    detectionResults.structuralAnalysis = {
+      isAd: structuralResult,
+      confidence: structuralResult ? 0.7 : 0
+    };
     
-    // 高级检测：基于时长的广告检测
-    if (this.isDurationBasedAd(line, currentDuration)) {
-      this.logFilterAction('时长广告拦截', line, 'DURATION');
-      return true;
-    }
+    // 3. 时长分析
+    const durationResult = this.isDurationBasedAd(line, currentDuration);
+    detectionResults.durationAnalysis = {
+      isAd: durationResult,
+      confidence: durationResult ? 0.6 : 0,
+      duration: currentDuration
+    };
     
-    // 新增：TS内容检测
+    // 4. TS内容分析
     if (this.enableTSDetection) {
       const tsAdResult = await this.isAdByTSContent(line);
-      if (tsAdResult.isAd) {
-        this.logFilterAction('TS内容广告拦截', line, `TS_CONTENT_${tsAdResult.probability.toFixed(2)}`);
-        return true;
+      detectionResults.tsContentAnalysis = {
+        isAd: tsAdResult.isAd,
+        confidence: tsAdResult.confidence || 0,
+        probability: tsAdResult.probability || 0,
+        features: tsAdResult.features || {},
+        metadata: tsAdResult.metadata || null
+      };
+    }
+    
+    // 5. 网络分析
+    const networkResult = this.analyzeNetworkFeatures(line);
+    detectionResults.networkAnalysis = {
+      isAd: networkResult.isAd,
+      confidence: networkResult.confidence,
+      features: networkResult.features,
+      patterns: networkResult.patterns
+    };
+    
+    // 6. 播放列表上下文分析
+    const playlistContextResult = this.analyzePlaylistContext(line, currentDuration, segmentIndex);
+    detectionResults.playlistContext = {
+      isAd: playlistContextResult.isAd,
+      confidence: playlistContextResult.confidence,
+      patterns: playlistContextResult.patterns
+    };
+    
+    // 使用多源数据融合引擎融合结果
+    const fusionResult = this.fusionEngine.fuse(detectionResults);
+    
+    // 更新融合统计信息
+    this.stats.fusionStats = {
+      totalDecisions: this.fusionEngine.getStats().totalDecisions,
+      adsDetected: this.fusionEngine.getStats().adsDetected,
+      nonAdsDetected: this.fusionEngine.getStats().nonAdsDetected,
+      fusionTime: this.fusionEngine.getStats().fusionTime
+    };
+    
+    // 神经网络模型检测
+    let nnResult = {
+      isAd: false,
+      confidence: 0,
+      probability: 0
+    };
+    
+    if (this.enableNNDetection) {
+      const nnStartTime = Date.now();
+      
+      try {
+        // 使用神经网络模型进行预测
+        const nnProbability = await this.nnModel.predict(detectionResults);
+        nnResult = {
+          isAd: nnProbability > 0.6,
+          confidence: nnProbability,
+          probability: nnProbability
+        };
+        
+        // 更新神经网络统计信息
+        this.stats.nnDetectionStats.totalPredictions++;
+        this.stats.nnDetectionStats.avgPredictionTime = (
+          (this.stats.nnDetectionStats.avgPredictionTime * (this.stats.nnDetectionStats.totalPredictions - 1)) +
+          (Date.now() - nnStartTime)
+        ) / this.stats.nnDetectionStats.totalPredictions;
+        
+        if (nnResult.isAd) {
+          this.stats.nnDetectionStats.nnAdsDetected++;
+        }
+        
+      } catch (error) {
+        logger.error('神经网络预测失败', error);
       }
     }
     
-    return false;
+    // 最终决策：结合多源融合和神经网络结果
+    let finalResult = fusionResult;
+    let finalIsAd = fusionResult.isAd;
+    let finalConfidence = fusionResult.confidence;
+    
+    // 如果神经网络有较高置信度，调整最终结果
+    if (nnResult.confidence > 0.8) {
+      finalIsAd = nnResult.isAd;
+      finalConfidence = (fusionResult.confidence * 0.6) + (nnResult.confidence * 0.4);
+    } else if (nnResult.confidence > 0.5) {
+      // 中等置信度，加权平均
+      finalConfidence = (fusionResult.confidence * 0.7) + (nnResult.confidence * 0.3);
+      finalIsAd = finalConfidence > 0.6;
+    }
+    
+    // 记录过滤操作
+    if (finalIsAd) {
+      const sourceInfo = Object.entries(fusionResult.sources)
+        .filter(([_, result]) => result.isAd)
+        .map(([source, _]) => source)
+        .join(',');
+      
+      const nnInfo = this.enableNNDetection ? `_NN_${nnResult.probability.toFixed(2)}` : '';
+      
+      this.logFilterAction(
+        '多源融合+神经网络广告拦截', 
+        line, 
+        `FUSION${nnInfo}_${sourceInfo}_${finalConfidence.toFixed(2)}`
+      );
+    }
+    
+    return {
+      isAd: finalIsAd,
+      confidence: finalConfidence,
+      fusionResult: fusionResult,
+      nnResult: nnResult
+    };
   }
 
   /**
@@ -109,6 +254,120 @@ class M3U8Processor {
     } catch (error) {
       return false;
     }
+  }
+
+  /**
+   * 分析URL的网络特征
+   * @param {string} line - URL行
+   * @returns {object} 网络特征分析结果
+   */
+  analyzeNetworkFeatures(line) {
+    let result = {
+      isAd: false,
+      confidence: 0,
+      features: {
+        domain: '',
+        path: '',
+        hasQueryParams: false,
+        queryParamCount: 0,
+        hasAdKeywords: false,
+        adDomainMatch: false,
+        cdnDomain: false,
+        isThirdParty: false
+      },
+      patterns: []
+    };
+    
+    try {
+      // 解析URL
+      const urlObj = new URL(line.startsWith('http') ? line : this.baseUrl + line);
+      result.features.domain = urlObj.hostname;
+      result.features.path = urlObj.pathname;
+      result.features.hasQueryParams = urlObj.search.length > 0;
+      result.features.queryParamCount = urlObj.searchParams.size;
+      
+      // 检测广告域名
+      const adDomains = [
+        'doubleclick.net',
+        'googlesyndication.com',
+        'googleadservices.com',
+        'adnxs.com',
+        'adsystem.com',
+        'advertising.com',
+        'adsafeprotected.com',
+        'moatads.com',
+        'scorecardresearch.com'
+      ];
+      
+      const adDomainMatch = adDomains.some(domain => urlObj.hostname.includes(domain));
+      result.features.adDomainMatch = adDomainMatch;
+      
+      if (adDomainMatch) {
+        result.patterns.push('AD_DOMAIN_MATCH');
+        result.confidence += 0.8;
+      }
+      
+      // 检测CDN域名
+      const cdnDomains = [
+        'cloudflare.net',
+        'akamai.net',
+        'fastly.net',
+        'cloudfront.net',
+        'cdn.jsdelivr.net',
+        'jsdelivr.net'
+      ];
+      
+      result.features.cdnDomain = cdnDomains.some(domain => urlObj.hostname.includes(domain));
+      
+      // 检测广告关键词
+      const adKeywords = [
+        'ad_', 'advertisement', 'commercial', 'adjump', 'adserver',
+        'banner', 'promo', 'sponsor', 'marketing', 'affiliate'
+      ];
+      
+      const urlLower = line.toLowerCase();
+      const hasAdKeywords = adKeywords.some(keyword => urlLower.includes(keyword));
+      result.features.hasAdKeywords = hasAdKeywords;
+      
+      if (hasAdKeywords) {
+        result.patterns.push('AD_KEYWORDS_IN_URL');
+        result.confidence += 0.3;
+      }
+      
+      // 检测是否为第三方域名（与基础URL比较）
+      if (this.baseUrl) {
+        const baseUrlObj = new URL(this.baseUrl);
+        const baseDomain = baseUrlObj.hostname.split('.').slice(-2).join('.');
+        const currentDomain = urlObj.hostname.split('.').slice(-2).join('.');
+        result.features.isThirdParty = baseDomain !== currentDomain;
+        
+        if (result.features.isThirdParty && hasAdKeywords) {
+          result.patterns.push('THIRD_PARTY_WITH_AD_KEYWORDS');
+          result.confidence += 0.2;
+        }
+      }
+      
+      // 检测异常长路径
+      if (urlObj.pathname.length > 100) {
+        result.patterns.push('UNUSUALLY_LONG_PATH');
+        result.confidence += 0.1;
+      }
+      
+      // 检测大量查询参数
+      if (urlObj.searchParams.size > 5) {
+        result.patterns.push('MANY_QUERY_PARAMS');
+        result.confidence += 0.1;
+      }
+      
+      // 计算最终结果
+      result.confidence = Math.min(result.confidence, 1);
+      result.isAd = result.confidence > 0.5;
+      
+    } catch (error) {
+      logger.debug('网络特征分析失败', { error: error.message, url: line });
+    }
+    
+    return result;
   }
 
   /**
@@ -274,6 +533,227 @@ class M3U8Processor {
   }
 
   /**
+   * 初始化播放列表分析上下文
+   */
+  initPlaylistContext() {
+    this.playlistContext = {
+      // 播放列表类型：VOD 或 LIVE
+      type: 'UNKNOWN',
+      // 总时长
+      totalDuration: 0,
+      // 片段数量
+      segmentCount: 0,
+      // 平均片段时长
+      avgSegmentDuration: 0,
+      // 片段时长分布
+      durationDistribution: {},
+      // 最大片段时长
+      maxSegmentDuration: 0,
+      // 最小片段时长
+      minSegmentDuration: Infinity,
+      // 不连续点位置
+      discontinuityPositions: [],
+      // 当前片段索引
+      currentSegmentIndex: 0,
+      // 已分析的片段时长
+      analyzedDurations: [],
+      // 广告模式检测
+      adPatternsDetected: [],
+      // 最近的非广告片段时长
+      recentNonAdDurations: []
+    };
+  }
+
+  /**
+   * 更新播放列表上下文
+   * @param {string} m3u8Content - M3U8内容
+   */
+  updatePlaylistContext(m3u8Content) {
+    this.initPlaylistContext();
+    
+    const lines = m3u8Content.split('\n');
+    let currentDuration = null;
+    let segmentIndex = 0;
+    let totalDuration = 0;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      // 检测播放列表类型
+      if (line.startsWith('#EXT-X-PLAYLIST-TYPE:')) {
+        this.playlistContext.type = line.split(':')[1].trim();
+      }
+      
+      // 检测EXTINF标签获取时长
+      if (line.startsWith('#EXTINF:')) {
+        const durationMatch = line.match(/#EXTINF:([\d.]+)/);
+        if (durationMatch) {
+          currentDuration = parseFloat(durationMatch[1]);
+        }
+      } 
+      // 检测片段URL
+      else if (!line.startsWith('#') && currentDuration) {
+        // 更新片段统计
+        this.playlistContext.segmentCount++;
+        totalDuration += currentDuration;
+        
+        // 更新时长分布
+        const roundedDuration = Math.round(currentDuration);
+        this.playlistContext.durationDistribution[roundedDuration] = 
+          (this.playlistContext.durationDistribution[roundedDuration] || 0) + 1;
+        
+        // 更新最大/最小时长
+        this.playlistContext.maxSegmentDuration = Math.max(
+          this.playlistContext.maxSegmentDuration, currentDuration
+        );
+        this.playlistContext.minSegmentDuration = Math.min(
+          this.playlistContext.minSegmentDuration, currentDuration
+        );
+        
+        // 保存分析的时长
+        this.playlistContext.analyzedDurations.push(currentDuration);
+        
+        // 重置当前时长
+        currentDuration = null;
+        segmentIndex++;
+      }
+      
+      // 检测不连续点
+      if (line.startsWith('#EXT-X-DISCONTINUITY')) {
+        this.playlistContext.discontinuityPositions.push(segmentIndex);
+      }
+    }
+    
+    // 计算平均片段时长
+    this.playlistContext.avgSegmentDuration = totalDuration / this.playlistContext.segmentCount || 0;
+    this.playlistContext.totalDuration = totalDuration;
+    
+    // 检测广告模式
+    this.detectAdPatterns();
+  }
+
+  /**
+   * 检测播放列表中的广告模式
+   */
+  detectAdPatterns() {
+    const { durationDistribution, discontinuityPositions } = this.playlistContext;
+    
+    // 检测常见广告时长模式
+    const commonAdDurations = [5, 10, 15, 30];
+    const detectedDurations = commonAdDurations.filter(duration => 
+      durationDistribution[duration] && durationDistribution[duration] > 1
+    );
+    
+    if (detectedDurations.length > 0) {
+      this.playlistContext.adPatternsDetected.push({
+        type: 'COMMON_AD_DURATIONS',
+        durations: detectedDurations,
+        confidence: 0.7
+      });
+    }
+    
+    // 检测不连续点周围的异常时长
+    if (discontinuityPositions.length > 0) {
+      this.playlistContext.adPatternsDetected.push({
+        type: 'DISCONTINUITY_PATTERN',
+        positions: discontinuityPositions,
+        count: discontinuityPositions.length,
+        confidence: 0.6
+      });
+    }
+    
+    // 检测时长突变模式
+    const durations = this.playlistContext.analyzedDurations;
+    for (let i = 1; i < durations.length; i++) {
+      const ratio = durations[i] / durations[i - 1];
+      if (ratio > 2 || ratio < 0.5) {
+        this.playlistContext.adPatternsDetected.push({
+          type: 'DURATION_SPIKE',
+          position: i,
+          current: durations[i],
+          previous: durations[i - 1],
+          ratio: ratio,
+          confidence: 0.5
+        });
+      }
+    }
+  }
+
+  /**
+   * 基于播放列表上下文分析片段
+   * @param {string} line - 片段URL
+   * @param {number} currentDuration - 当前片段时长
+   * @param {number} segmentIndex - 当前片段索引
+   * @returns {object} 上下文分析结果
+   */
+  analyzePlaylistContext(line, currentDuration, segmentIndex) {
+    const { 
+      avgSegmentDuration, 
+      discontinuityPositions, 
+      adPatternsDetected,
+      durationDistribution
+    } = this.playlistContext;
+    
+    // 初始化分析结果
+    let result = {
+      isAd: false,
+      confidence: 0,
+      patterns: []
+    };
+    
+    // 检查是否在不连续点附近
+    const nearDiscontinuity = discontinuityPositions.some(pos => 
+      Math.abs(pos - segmentIndex) <= 1
+    );
+    
+    if (nearDiscontinuity) {
+      result.patterns.push('NEAR_DISCONTINUITY');
+      result.confidence += 0.2;
+    }
+    
+    // 检查是否为常见广告时长
+    const roundedDuration = Math.round(currentDuration);
+    const isCommonAdDuration = [5, 10, 15, 30].includes(roundedDuration);
+    
+    if (isCommonAdDuration) {
+      const count = durationDistribution[roundedDuration] || 0;
+      // 如果同时长片段出现多次，增加置信度
+      if (count > 1) {
+        result.patterns.push('COMMON_AD_DURATION');
+        result.confidence += 0.3;
+      }
+    }
+    
+    // 检查与平均时长的偏差
+    const durationDeviation = Math.abs(currentDuration - avgSegmentDuration) / avgSegmentDuration;
+    
+    if (avgSegmentDuration > 0 && durationDeviation > 0.5) {
+      result.patterns.push('DURATION_DEVIATION');
+      result.confidence += Math.min(durationDeviation * 0.2, 0.3);
+    }
+    
+    // 检查广告模式检测结果
+    const relevantPatterns = adPatternsDetected.filter(pattern => {
+      if (pattern.type === 'DURATION_SPIKE') {
+        return Math.abs(pattern.position - segmentIndex) <= 1;
+      }
+      return true;
+    });
+    
+    if (relevantPatterns.length > 0) {
+      result.patterns.push('AD_PATTERN_DETECTED');
+      result.confidence += relevantPatterns.length * 0.1;
+    }
+    
+    // 计算最终结果
+    result.confidence = Math.min(result.confidence, 1);
+    result.isAd = result.confidence > 0.5;
+    
+    return result;
+  }
+
+  /**
    * 处理M3U8内容 - 增强版（支持TS检测）
    * @param {string} m3u8Content - 原始M3U8内容
    * @param {string} sourceUrl - 源URL
@@ -296,6 +776,10 @@ class M3U8Processor {
     let bufferTags = []; // 暂存与切片相关的标签
     let isVod = false;
     let currentDuration = null; // 当前片段的时长
+    let segmentIndex = 0; // 当前片段索引
+    
+    // 更新播放列表上下文
+    this.updatePlaylistContext(m3u8Content);
 
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i].trim();
@@ -331,14 +815,17 @@ class M3U8Processor {
       } else {
         // 处理文件路径/URL行
         this.stats.totalProcessed++;
-        const isAd = await this.isAdvertisement(line, currentDuration);
+        const adResult = await this.isAdvertisement(line, currentDuration, segmentIndex);
+        const isAd = adResult.isAd;
 
         if (isAd) {
           // 广告片段，记录并清空缓存的标签
           filteredSegments.push({
             url: line,
             duration: currentDuration,
-            reason: 'advertisement'
+            reason: 'advertisement',
+            confidence: adResult.confidence,
+            fusionResult: adResult.fusionResult
           });
           bufferTags = [];
           this.stats.adsFiltered++;
@@ -353,10 +840,20 @@ class M3U8Processor {
           const resolvedUrl = this.resolveUrl(line);
           processedLines.push(resolvedUrl);
           this.stats.segmentsKept++;
+          
+          // 记录最近的非广告片段时长，用于学习
+          if (currentDuration) {
+            this.playlistContext.recentNonAdDurations.push(currentDuration);
+            // 只保留最近10个非广告片段时长
+            if (this.playlistContext.recentNonAdDurations.length > 10) {
+              this.playlistContext.recentNonAdDurations.shift();
+            }
+          }
         }
         
         // 重置当前时长
         currentDuration = null;
+        segmentIndex++;
       }
     }
 

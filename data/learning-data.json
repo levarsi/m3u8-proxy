@@ -8,11 +8,11 @@
   },
   "model": {
     "featureWeights": {
-      "resolutionChange": 0.15,
-      "bitrateAnomaly": 0.25,
-      "encodingMismatch": 0.2,
-      "durationAnomaly": 0.2,
-      "frameRateChange": 0.1,
+      "resolutionChange": 0.12,
+      "bitrateAnomaly": 0.21,
+      "encodingMismatch": 0.18,
+      "durationAnomaly": 0.12,
+      "frameRateChange": 0.09,
       "streamStructureAnomaly": 0.05,
       "timestampAnomaly": 0.05
     }
@@ -155,6 +155,563 @@
           "frameRate": 25
         },
         "audioInfo": null
+      },
+      "actual": null
+    },
+    {
+      "timestamp": 1766293823625,
+      "isAd": false,
+      "probability": 0.29,
+      "features": {
+        "resolutionChange": {
+          "detected": false,
+          "confidence": 0,
+          "details": "缺少比较基准"
+        },
+        "bitrateAnomaly": {
+          "detected": true,
+          "confidence": 0.6,
+          "details": {
+            "current": 1500,
+            "isAdRange": true
+          }
+        },
+        "encodingMismatch": {
+          "detected": false,
+          "confidence": 0,
+          "details": "缺少比较基准"
+        },
+        "durationAnomaly": {
+          "detected": true,
+          "confidence": 0.7,
+          "details": {
+            "duration": 15,
+            "isAdDuration": true,
+            "isTooShort": false,
+            "isTooLong": false
+          }
+        },
+        "frameRateChange": {
+          "detected": false,
+          "confidence": 0,
+          "details": "缺少帧率信息"
+        },
+        "streamStructureAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "anomalies": [],
+            "streamType": 27,
+            "hasAudio": true,
+            "sizePerSecond": 94258.66666666667
+          }
+        },
+        "timestampAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": "缺少时间戳信息"
+        }
+      },
+      "metadata": {
+        "duration": 15,
+        "bitrate": 1500,
+        "size": 1413880,
+        "videoInfo": {
+          "width": 1280,
+          "height": 720,
+          "frameRate": 25
+        },
+        "audioInfo": {
+          "channels": 2,
+          "sampleRate": 48000
+        }
+      },
+      "actual": null
+    },
+    {
+      "timestamp": 1766293823853,
+      "isAd": true,
+      "probability": 1.29,
+      "features": {
+        "resolutionChange": {
+          "detected": true,
+          "confidence": 5,
+          "details": {
+            "current": {
+              "width": 1920,
+              "height": 1080
+            },
+            "last": {
+              "width": 1280,
+              "height": 720
+            },
+            "widthChange": 640,
+            "heightChange": 360
+          }
+        },
+        "bitrateAnomaly": {
+          "detected": true,
+          "confidence": 1,
+          "details": {
+            "current": 3000,
+            "last": 1500,
+            "change": 1500,
+            "isAdRange": false
+          }
+        },
+        "encodingMismatch": {
+          "detected": true,
+          "confidence": 0.5,
+          "details": {
+            "mismatches": [
+              {
+                "type": "profile",
+                "current": "high",
+                "last": "baseline"
+              },
+              {
+                "type": "frameRate",
+                "current": 30,
+                "last": 25,
+                "change": 5
+              }
+            ],
+            "totalWeight": 0.5
+          }
+        },
+        "durationAnomaly": {
+          "detected": true,
+          "confidence": 0.7,
+          "details": {
+            "duration": 10,
+            "isAdDuration": true,
+            "isTooShort": false,
+            "isTooLong": false
+          }
+        },
+        "frameRateChange": {
+          "detected": true,
+          "confidence": 0.5,
+          "details": {
+            "current": 30,
+            "last": 25,
+            "change": 5
+          }
+        },
+        "streamStructureAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "anomalies": [],
+            "streamType": 27,
+            "hasAudio": true,
+            "sizePerSecond": 78527.8
+          }
+        },
+        "timestampAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "currentPTS": 158966444146770,
+            "lastPTS": 158966444126160,
+            "ptsGap": 20610,
+            "gapInSeconds": 0.229
+          }
+        }
+      },
+      "metadata": {
+        "duration": 10,
+        "bitrate": 3000,
+        "size": 785278,
+        "videoInfo": {
+          "width": 1920,
+          "height": 1080,
+          "frameRate": 30
+        },
+        "audioInfo": {
+          "channels": 2,
+          "sampleRate": 48000
+        }
+      },
+      "actual": null
+    },
+    {
+      "timestamp": 1766293824105,
+      "isAd": false,
+      "probability": 0.13999999999999999,
+      "features": {
+        "resolutionChange": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": {
+              "width": 1920,
+              "height": 1080
+            },
+            "last": {
+              "width": 1920,
+              "height": 1080
+            },
+            "widthChange": 0,
+            "heightChange": 0
+          }
+        },
+        "bitrateAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": 3000,
+            "last": 3000,
+            "change": 0,
+            "isAdRange": false
+          }
+        },
+        "encodingMismatch": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "mismatches": [],
+            "totalWeight": 0
+          }
+        },
+        "durationAnomaly": {
+          "detected": true,
+          "confidence": 0.7,
+          "details": {
+            "duration": 10,
+            "isAdDuration": true,
+            "isTooShort": false,
+            "isTooLong": false
+          }
+        },
+        "frameRateChange": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": 30,
+            "last": 30,
+            "change": 0
+          }
+        },
+        "streamStructureAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "anomalies": [],
+            "streamType": 27,
+            "hasAudio": true,
+            "sizePerSecond": 86558.9
+          }
+        },
+        "timestampAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "currentPTS": 158966444169450,
+            "lastPTS": 158966444146770,
+            "ptsGap": 22680,
+            "gapInSeconds": 0.252
+          }
+        }
+      },
+      "metadata": {
+        "duration": 10,
+        "bitrate": 3000,
+        "size": 865589,
+        "videoInfo": {
+          "width": 1920,
+          "height": 1080,
+          "frameRate": 30
+        },
+        "audioInfo": {
+          "channels": 2,
+          "sampleRate": 48000
+        }
+      },
+      "actual": null
+    },
+    {
+      "timestamp": 1766293824331,
+      "isAd": false,
+      "probability": 0.13999999999999999,
+      "features": {
+        "resolutionChange": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": {
+              "width": 1920,
+              "height": 1080
+            },
+            "last": {
+              "width": 1920,
+              "height": 1080
+            },
+            "widthChange": 0,
+            "heightChange": 0
+          }
+        },
+        "bitrateAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": 3000,
+            "last": 3000,
+            "change": 0,
+            "isAdRange": false
+          }
+        },
+        "encodingMismatch": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "mismatches": [],
+            "totalWeight": 0
+          }
+        },
+        "durationAnomaly": {
+          "detected": true,
+          "confidence": 0.7,
+          "details": {
+            "duration": 10,
+            "isAdDuration": true,
+            "isTooShort": false,
+            "isTooLong": false
+          }
+        },
+        "frameRateChange": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": 30,
+            "last": 30,
+            "change": 0
+          }
+        },
+        "streamStructureAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "anomalies": [],
+            "streamType": 27,
+            "hasAudio": true,
+            "sizePerSecond": 78544
+          }
+        },
+        "timestampAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "currentPTS": 158966444189790,
+            "lastPTS": 158966444169450,
+            "ptsGap": 20340,
+            "gapInSeconds": 0.226
+          }
+        }
+      },
+      "metadata": {
+        "duration": 10,
+        "bitrate": 3000,
+        "size": 785440,
+        "videoInfo": {
+          "width": 1920,
+          "height": 1080,
+          "frameRate": 30
+        },
+        "audioInfo": {
+          "channels": 2,
+          "sampleRate": 48000
+        }
+      },
+      "actual": null
+    },
+    {
+      "timestamp": 1766293824571,
+      "isAd": false,
+      "probability": 0.13999999999999999,
+      "features": {
+        "resolutionChange": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": {
+              "width": 1920,
+              "height": 1080
+            },
+            "last": {
+              "width": 1920,
+              "height": 1080
+            },
+            "widthChange": 0,
+            "heightChange": 0
+          }
+        },
+        "bitrateAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": 3000,
+            "last": 3000,
+            "change": 0,
+            "isAdRange": false
+          }
+        },
+        "encodingMismatch": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "mismatches": [],
+            "totalWeight": 0
+          }
+        },
+        "durationAnomaly": {
+          "detected": true,
+          "confidence": 0.7,
+          "details": {
+            "duration": 10,
+            "isAdDuration": true,
+            "isTooShort": false,
+            "isTooLong": false
+          }
+        },
+        "frameRateChange": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": 30,
+            "last": 30,
+            "change": 0
+          }
+        },
+        "streamStructureAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "anomalies": [],
+            "streamType": 27,
+            "hasAudio": true,
+            "sizePerSecond": 62617.3
+          }
+        },
+        "timestampAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "currentPTS": 158966444211390,
+            "lastPTS": 158966444189790,
+            "ptsGap": 21600,
+            "gapInSeconds": 0.24
+          }
+        }
+      },
+      "metadata": {
+        "duration": 10,
+        "bitrate": 3000,
+        "size": 626173,
+        "videoInfo": {
+          "width": 1920,
+          "height": 1080,
+          "frameRate": 30
+        },
+        "audioInfo": {
+          "channels": 2,
+          "sampleRate": 48000
+        }
+      },
+      "actual": null
+    },
+    {
+      "timestamp": 1766293825599,
+      "isAd": false,
+      "probability": 0.13999999999999999,
+      "features": {
+        "resolutionChange": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": {
+              "width": 1920,
+              "height": 1080
+            },
+            "last": {
+              "width": 1920,
+              "height": 1080
+            },
+            "widthChange": 0,
+            "heightChange": 0
+          }
+        },
+        "bitrateAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": 3000,
+            "last": 3000,
+            "change": 0,
+            "isAdRange": false
+          }
+        },
+        "encodingMismatch": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "mismatches": [],
+            "totalWeight": 0
+          }
+        },
+        "durationAnomaly": {
+          "detected": true,
+          "confidence": 0.7,
+          "details": {
+            "duration": 10,
+            "isAdDuration": true,
+            "isTooShort": false,
+            "isTooLong": false
+          }
+        },
+        "frameRateChange": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "current": 30,
+            "last": 30,
+            "change": 0
+          }
+        },
+        "streamStructureAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "anomalies": [],
+            "streamType": 27,
+            "hasAudio": true,
+            "sizePerSecond": 54280.1
+          }
+        },
+        "timestampAnomaly": {
+          "detected": false,
+          "confidence": 0,
+          "details": {
+            "currentPTS": 158966444303910,
+            "lastPTS": 158966444211390,
+            "ptsGap": 92520,
+            "gapInSeconds": 1.028
+          }
+        }
+      },
+      "metadata": {
+        "duration": 10,
+        "bitrate": 3000,
+        "size": 542801,
+        "videoInfo": {
+          "width": 1920,
+          "height": 1080,
+          "frameRate": 30
+        },
+        "audioInfo": {
+          "channels": 2,
+          "sampleRate": 48000
+        }
       },
       "actual": null
     }

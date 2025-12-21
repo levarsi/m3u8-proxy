@@ -2,6 +2,37 @@ const logger = require('./logger');
 const fs = require('fs');
 const path = require('path');
 
+// 尝试加载 mpegts.js，处理 Node.js 环境下的兼容性问题
+let mpegts;
+try {
+  // 检查是否为浏览器环境
+  if (typeof window !== 'undefined') {
+    mpegts = require('mpegts.js');
+  } else {
+    // Node.js 环境下的回退实现
+    mpegts = {
+      createParser: () => {
+        return {
+          on: () => {},
+          write: () => {},
+          end: () => {}
+        };
+      }
+    };
+  }
+} catch (error) {
+  logger.warn('未能加载 mpegts.js，将使用基础解析实现', error.message);
+  mpegts = {
+    createParser: () => {
+      return {
+        on: () => {},
+        write: () => {},
+        end: () => {}
+      };
+    }
+  };
+}
+
 /**
  * TS元数据检测器 - 基于MPEG-TS元数据的广告识别
  * 通过解析TS切片的PAT/PMT表和视频流元数据来识别广告特征
@@ -392,6 +423,98 @@ class TSMetadataDetector {
         throw new Error('无效的TS格式');
       }
 
+      // 使用mpegts.js创建解析器
+      const parser = mpegts.createParser();
+      let metadata = {
+        pid: 0,
+        streamType: 0,
+        videoInfo: null,
+        audioInfo: null,
+        duration: 0,
+        bitrate: 0,
+        timestamps: {
+          pts: 0,
+          dts: 0
+        },
+        size: buffer.length,
+        programInfo: [],
+        streamInfo: []
+      };
+
+      // 解析PAT表
+      parser.on('pat', (data) => {
+        metadata.pat = data;
+        metadata.programInfo = data.program_numbers.map(pnum => ({
+          programNumber: pnum,
+          pid: data.pids[pnum]
+        }));
+      });
+
+      // 解析PMT表
+      parser.on('pmt', (data) => {
+        metadata.pmt = data;
+        metadata.streamInfo = data.streams.map(stream => ({
+          pid: stream.pid,
+          type: stream.type,
+          codec: stream.codec
+        }));
+        metadata.pid = data.pmt_pid;
+      });
+
+      // 解析视频元数据
+      parser.on('video_data', (data) => {
+        if (data.codec === 'H264' || data.codec === 'H265') {
+          metadata.videoInfo = {
+            width: data.width || 0,
+            height: data.height || 0,
+            frameRate: data.frame_rate || 0,
+            profile: data.profile || '',
+            codec: data.codec
+          };
+        }
+      });
+
+      // 解析音频元数据
+      parser.on('audio_data', (data) => {
+        metadata.audioInfo = {
+          codec: data.codec || '',
+          sampleRate: data.sample_rate || 0,
+          channels: data.channels || 0,
+          bitrate: data.bitrate || 0
+        };
+      });
+
+      // 解析PTS/DTS时间戳
+      parser.on('pts', (data) => {
+        metadata.timestamps = {
+          pts: data.pts || 0,
+          dts: data.dts || 0
+        };
+      });
+
+      // 解析码率信息
+      parser.on('bitrate', (data) => {
+        metadata.bitrate = data.bitrate || 0;
+      });
+
+      // 执行解析
+      parser.write(new Uint8Array(buffer));
+      parser.end();
+
+      // 估算时长（如果没有直接获取到）
+      if (!metadata.duration) {
+        metadata.duration = this.estimateDuration(buffer);
+      }
+
+      // 检测流类型
+      metadata.streamType = metadata.streamInfo.find(stream => 
+        stream.type === 0x1b || stream.type === 0x24
+      )?.type || 0;
+
+      return metadata;
+    } catch (error) {
+      logger.error('TS Buffer解析失败', error);
+      // 回退到原始解析方法
       return {
         pid: this.extractPID(buffer),
         streamType: this.detectStreamType(buffer),
@@ -402,9 +525,6 @@ class TSMetadataDetector {
         timestamps: this.extractTimestamps(buffer),
         size: buffer.length
       };
-    } catch (error) {
-      logger.error('TS Buffer解析失败', error);
-      return null;
     }
   }
   
