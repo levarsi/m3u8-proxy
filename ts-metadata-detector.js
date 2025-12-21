@@ -1,4 +1,6 @@
 const logger = require('./logger');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * TS元数据检测器 - 基于MPEG-TS元数据的广告识别
@@ -33,6 +35,38 @@ class TSMetadataDetector {
 
     // 元数据缓存（避免重复分析相同内容）
     this.metadataCache = new Map();
+    
+    // 智能学习模块
+    this.learningModule = {
+      // 历史检测数据
+      history: [],
+      // 学习率
+      learningRate: 0.1,
+      // 最小样本数
+      minSamples: 10,
+      // 反馈数据
+      feedback: [],
+      // 自适应阈值
+      adaptiveThresholds: { ...this.thresholds },
+      // 学习模型
+      model: {
+        featureWeights: {
+          resolutionChange: 0.15,
+          bitrateAnomaly: 0.25,
+          encodingMismatch: 0.20,
+          durationAnomaly: 0.20,
+          frameRateChange: 0.10,
+          streamStructureAnomaly: 0.05,
+          timestampAnomaly: 0.05
+        }
+      }
+    };
+    
+    // 学习数据持久化路径
+    this.learningDataPath = path.join(__dirname, 'data', 'learning-data.json');
+    
+    // 初始化学习模块
+    this.initLearningModule();
   }
 
   /**
@@ -94,16 +128,19 @@ class TSMetadataDetector {
       }
 
       // 更新前一个片段元数据
-      this.lastSegmentMetadata = metadata;
+    this.lastSegmentMetadata = metadata;
+    
+    // 记录到学习历史
+    this.recordToHistory(result, adFeatures, metadata);
 
-      logger.debug('TS元数据检测完成', {
-        url: context.url,
-        isAd: result.isAd,
-        probability: adProbability,
-        analysisTime: result.analysisTime
-      });
+    logger.debug('TS元数据检测完成', {
+      url: context.url,
+      isAd: result.isAd,
+      probability: adProbability,
+      analysisTime: result.analysisTime
+    });
 
-      return result;
+    return result;
 
     } catch (error) {
       logger.error('TS元数据检测失败', error, { context });
@@ -117,20 +154,227 @@ class TSMetadataDetector {
   }
 
   /**
+   * 初始化学习模块
+   */
+  initLearningModule() {
+    // 创建数据目录
+    const dataDir = path.dirname(this.learningDataPath);
+    try {
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+        logger.info(`创建数据目录: ${dataDir}`);
+      }
+    } catch (error) {
+      logger.error('创建数据目录失败', error);
+    }
+    
+    // 加载历史学习数据
+    this.loadLearningData();
+  }
+  
+  /**
+   * 保存学习数据到文件
+   */
+  saveLearningData() {
+    try {
+      const dataToSave = {
+        thresholds: this.learningModule.adaptiveThresholds,
+        model: this.learningModule.model,
+        history: this.learningModule.history.slice(-1000) // 只保存最近1000条记录
+      };
+      
+      // 确保目录存在
+      const dataDir = path.dirname(this.learningDataPath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      fs.writeFileSync(this.learningDataPath, JSON.stringify(dataToSave, null, 2));
+      logger.debug(`学习数据已保存到: ${this.learningDataPath}`);
+    } catch (error) {
+      logger.error('保存学习数据失败', error);
+      // 输出更详细的错误信息
+      console.error('保存学习数据错误:', error.message);
+      console.error('保存路径:', this.learningDataPath);
+    }
+  }
+  
+  /**
+   * 从文件加载学习数据
+   */
+  loadLearningData() {
+    try {
+      if (fs.existsSync(this.learningDataPath)) {
+        const data = JSON.parse(fs.readFileSync(this.learningDataPath, 'utf8'));
+        if (data.thresholds) {
+          this.learningModule.adaptiveThresholds = data.thresholds;
+        }
+        if (data.model) {
+          this.learningModule.model = data.model;
+        }
+        if (data.history) {
+          this.learningModule.history = data.history;
+        }
+        logger.info('学习数据加载完成');
+      }
+    } catch (error) {
+      logger.error('加载学习数据失败', error);
+    }
+  }
+  
+  /**
+   * 更新学习模型
+   */
+  updateLearningModel() {
+    const { history, model, learningRate } = this.learningModule;
+    
+    if (history.length < this.learningModule.minSamples) {
+      logger.debug(`跳过模型更新: 历史记录数量 (${history.length}) 少于最小样本数 (${this.learningModule.minSamples})`);
+      return;
+    }
+    
+    // 简单的自适应学习算法
+    // 这里可以扩展为更复杂的机器学习模型
+    const recentHistory = history.slice(-50);
+    
+    // 计算特征权重调整
+    const featureScores = {};
+    let totalCorrect = 0;
+    
+    recentHistory.forEach(item => {
+      if (item.isAd === item.actual) {
+        totalCorrect++;
+      }
+      
+      Object.entries(item.features).forEach(([feature, value]) => {
+        if (!featureScores[feature]) {
+          featureScores[feature] = 0;
+        }
+        
+        // 根据特征是否有助于正确判断调整权重
+        if (value.detected && item.isAd === item.actual) {
+          featureScores[feature] += 1;
+        } else if (value.detected && item.isAd !== item.actual) {
+          featureScores[feature] -= 1;
+        }
+      });
+    });
+    
+    // 更新特征权重
+    Object.entries(featureScores).forEach(([feature, score]) => {
+      if (model.featureWeights[feature] !== undefined) {
+        const adjustment = (score / recentHistory.length) * learningRate;
+        model.featureWeights[feature] = Math.max(0, Math.min(1, model.featureWeights[feature] + adjustment));
+      }
+    });
+    
+    // 保存更新后的模型
+    this.saveLearningData();
+    
+    logger.debug('学习模型已更新', {
+      accuracy: totalCorrect / recentHistory.length,
+      featureWeights: model.featureWeights
+    });
+  }
+  
+  /**
+   * 记录检测结果到学习历史
+   */
+  recordToHistory(result, features, metadata) {
+    const historyItem = {
+      timestamp: Date.now(),
+      isAd: result.isAd,
+      probability: result.probability,
+      features,
+      metadata: this.sanitizeMetadata(metadata),
+      actual: null // 实际是否为广告，可通过用户反馈设置
+    };
+    
+    this.learningModule.history.push(historyItem);
+    
+    logger.debug(`记录学习历史: ${result.isAd ? '广告' : '正常'} (概率: ${result.probability})`);
+    
+    // 定期更新模型
+    if (this.learningModule.history.length % 5 === 0) {
+      this.updateLearningModel();
+    }
+  }
+  
+  /**
+   * 清理元数据（用于保存到历史记录）
+   */
+  sanitizeMetadata(metadata) {
+    if (!metadata) return null;
+    
+    // 只保留必要的元数据字段，避免保存过大的对象
+    return {
+      duration: metadata.duration,
+      bitrate: metadata.bitrate,
+      size: metadata.size,
+      pid: metadata.pid,
+      streamType: metadata.streamType,
+      videoInfo: metadata.videoInfo ? {
+        width: metadata.videoInfo.width,
+        height: metadata.videoInfo.height,
+        frameRate: metadata.videoInfo.frameRate,
+        profile: metadata.videoInfo.profile
+      } : null,
+      audioInfo: metadata.audioInfo ? {
+        codec: metadata.audioInfo.codec,
+        sampleRate: metadata.audioInfo.sampleRate,
+        channels: metadata.audioInfo.channels
+      } : null
+    };
+  }
+  
+  /**
+   * 提供反馈数据
+   */
+  provideFeedback(segmentUrl, isAd, confidence = 1) {
+    const feedbackItem = {
+      timestamp: Date.now(),
+      segmentUrl,
+      isAd,
+      confidence
+    };
+    
+    this.learningModule.feedback.push(feedbackItem);
+    
+    // 更新历史记录中的实际值
+    const cacheKey = `url:${segmentUrl}`;
+    const cachedResult = this.metadataCache.get(cacheKey);
+    
+    if (cachedResult && cachedResult.metadata) {
+      const historyItem = this.learningModule.history.find(item => 
+        item.metadata && 
+        item.metadata.duration === cachedResult.metadata.duration &&
+        item.metadata.bitrate === cachedResult.metadata.bitrate
+      );
+      
+      if (historyItem) {
+        historyItem.actual = isAd;
+        logger.info('反馈数据已应用到学习历史', {
+          segmentUrl,
+          isAd
+        });
+      }
+    }
+    
+    // 更新模型
+    this.updateLearningModel();
+  }
+  
+  /**
    * 提取TS元数据
    * @param {Buffer|string} tsData - TS数据
    * @returns {object} 元数据信息
    */
   async extractMetadata(tsData) {
-    // 这里需要集成实际的TS解析库
-    // 目前先实现基础逻辑，后续集成mpegts.js
-    
     if (Buffer.isBuffer(tsData)) {
       return this.parseTSBuffer(tsData);
     } else if (typeof tsData === 'string') {
       // 如果是URL，需要先下载TS文件
-      // 这里先返回模拟数据
-      return this.getSimulatedMetadata(tsData);
+      return this.downloadAndParseTS(tsData);
     } else {
       throw new Error('不支持的TS数据类型');
     }
@@ -148,8 +392,6 @@ class TSMetadataDetector {
         throw new Error('无效的TS格式');
       }
 
-      // 这里应该集成mpegts.js进行实际解析
-      // 目前返回模拟数据用于开发测试
       return {
         pid: this.extractPID(buffer),
         streamType: this.detectStreamType(buffer),
@@ -163,6 +405,25 @@ class TSMetadataDetector {
     } catch (error) {
       logger.error('TS Buffer解析失败', error);
       return null;
+    }
+  }
+  
+  /**
+   * 下载并解析TS文件
+   * @param {string} tsUrl - TS文件URL
+   * @returns {Promise<object>} 解析结果
+   */
+  async downloadAndParseTS(tsUrl) {
+    try {
+      const axios = require('axios');
+      const response = await axios.get(tsUrl, { responseType: 'arraybuffer' });
+      const buffer = Buffer.from(response.data);
+      
+      return this.parseTSBuffer(buffer);
+    } catch (error) {
+      logger.error('下载TS文件失败', error, { tsUrl });
+      // 下载失败时使用模拟数据
+      return this.getSimulatedMetadata(tsUrl);
     }
   }
 
@@ -491,15 +752,7 @@ class TSMetadataDetector {
    * @returns {number} 广告概率（0-1）
    */
   calculateAdProbability(features) {
-    const weights = {
-      resolutionChange: 0.15,
-      bitrateAnomaly: 0.25,
-      encodingMismatch: 0.20,
-      durationAnomaly: 0.20,
-      frameRateChange: 0.10,
-      streamStructureAnomaly: 0.05,
-      timestampAnomaly: 0.05
-    };
+    const weights = this.learningModule.model.featureWeights;
 
     let totalScore = 0;
     let totalWeight = 0;
@@ -659,7 +912,14 @@ class TSMetadataDetector {
    * @returns {object} 统计数据
    */
   getStats() {
-    return { ...this.stats };
+    return {
+      ...this.stats,
+      learningStats: {
+        historyCount: this.learningModule.history.length,
+        feedbackCount: this.learningModule.feedback.length,
+        modelWeights: this.learningModule.model.featureWeights
+      }
+    };
   }
 
   /**
@@ -671,6 +931,20 @@ class TSMetadataDetector {
       adsDetected: 0,
       analysisTime: 0,
       cacheHits: 0
+    };
+  }
+  
+  /**
+   * 获取学习模型信息
+   */
+  getLearningModel() {
+    return {
+      featureWeights: { ...this.learningModule.model.featureWeights },
+      thresholds: { ...this.learningModule.adaptiveThresholds },
+      statistics: {
+        historySize: this.learningModule.history.length,
+        feedbackSize: this.learningModule.feedback.length
+      }
     };
   }
 

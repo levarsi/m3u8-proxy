@@ -461,6 +461,37 @@ class M3U8Processor {
       type: pattern instanceof RegExp ? 'regex' : 'string'
     }));
   }
+  
+  /**
+   * 提供广告检测反馈
+   * @param {string} segmentUrl - 片段URL
+   * @param {boolean} isAd - 实际是否为广告
+   * @param {number} confidence - 反馈置信度（0-1）
+   */
+  provideFeedback(segmentUrl, isAd, confidence = 1) {
+    return this.tsDetector.provideFeedback(segmentUrl, isAd, confidence);
+  }
+  
+  /**
+   * 获取学习模型信息
+   * @returns {object} 学习模型数据
+   */
+  getLearningModel() {
+    return this.tsDetector.getLearningModel();
+  }
+  
+  /**
+   * 获取智能学习统计信息
+   * @returns {object} 学习统计数据
+   */
+  getLearningStats() {
+    const stats = this.getStats();
+    return {
+      historyCount: stats.tsDetectorStats.learningStats.historyCount,
+      feedbackCount: stats.tsDetectorStats.learningStats.feedbackCount,
+      modelWeights: stats.tsDetectorStats.learningStats.modelWeights
+    };
+  }
 }
 
 module.exports = M3U8Processor;
