@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
 const config = require('./config');
 const logger = require('./logger');
 const statsManager = require('./stats-manager');
@@ -185,7 +186,9 @@ class CacheManager {
    * @returns {string} 缓存键
    */
   generateKey(url) {
-    return `m3u8:${url}`;
+    // 使用哈希生成固定长度的缓存键，节省内存
+    const hash = crypto.createHash('sha256').update(url).digest('hex');
+    return `m3u8:${hash.substring(0, 16)}`; // 使用前16个字符
   }
 
   /**

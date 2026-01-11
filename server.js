@@ -1,5 +1,8 @@
 const express = require('express');
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
+const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
@@ -9,10 +12,48 @@ const M3U8Processor = require('./m3u8-processor');
 const CacheManager = require('./cache-manager');
 const statsManager = require('./stats-manager');
 const logger = require('./logger');
+const {
+  errorHandler,
+  notFoundHandler,
+  asyncHandler,
+  ValidationError,
+  NotFoundError,
+  TimeoutError,
+  NetworkError,
+  ProxyError
+} = require('./utils/errorHandler');
 
 const app = express();
 const m3u8Processor = new M3U8Processor();
 const cacheManager = new CacheManager();
+
+// ==========================================
+// HTTP 连接池配置 (性能优化)
+// ==========================================
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  maxSockets: 50,
+  maxFreeSockets: 10,
+  timeout: 30000,
+  keepAliveTimeout: 30000
+});
+
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 50,
+  maxFreeSockets: 10,
+  timeout: 30000,
+  keepAliveTimeout: 30000,
+  rejectUnauthorized: false // 允许自签名证书
+});
+
+// 创建带连接池的 axios 实例
+const axiosInstance = axios.create({
+  httpAgent,
+  httpsAgent,
+  timeout: config.request.timeout,
+  maxRedirects: config.request.maxRedirects
+});
 
 // 全局变量
 global.requestCount = 0;
@@ -27,6 +68,18 @@ app.use((req, res, next) => {
   global.requestCount++;
   next();
 });
+
+// 响应压缩中间件 (性能优化)
+app.use(compression({
+  level: 6,
+  threshold: 1024, // 只压缩大于 1KB 的响应
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
 
 // 解析JSON请求体
 app.use(express.json());
@@ -193,9 +246,9 @@ async function fetchM3u8(url) {
   };
 
   logger.info(`请求M3U8`, { url });
-  
+
   try {
-    const response = await axios.get(url, options);
+    const response = await axiosInstance.get(url, options);
     
     // 验证响应内容
     if (!response.data) {
@@ -1246,6 +1299,16 @@ if (config.ui.enabled) {
     next();
   });
 }
+
+// ==========================================
+// 错误处理中间件
+// ==========================================
+
+// 404 处理
+app.use(notFoundHandler);
+
+// 全局错误处理
+app.use(errorHandler);
 
 // ==========================================
 // 启动服务

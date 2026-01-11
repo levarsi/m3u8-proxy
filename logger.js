@@ -246,10 +246,10 @@ class Logger {
    */
   addToMemoryCache(logEntry) {
     this.memoryLogs.push(logEntry);
-    
-    // 限制内存缓存大小
+
+    // 更高效的内存管理：移除最旧的条目而不是创建新数组
     if (this.memoryLogs.length > this.maxMemoryLogs) {
-      this.memoryLogs = this.memoryLogs.slice(-this.maxMemoryLogs);
+      this.memoryLogs.shift(); // 移除最旧的条目，O(1) 操作
     }
   }
 

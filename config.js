@@ -9,6 +9,67 @@ module.exports = {
     autoOpenBrowser: process.env.AUTO_OPEN_BROWSER === 'true' || false
   },
 
+  // 阈值常量（提取魔法数字）
+  thresholds: {
+    // 广告过滤阈值
+    adFilter: {
+      // TS检测相关
+      minDurationSeconds: 3,           // 最小片段时长（秒）
+      frameRateChangeThreshold: 2,     // 帧率变化阈值
+      resolutionChangeThreshold: 0.5,  // 分辨率变化阈值
+      bitrateChangeThreshold: 0.3,     // 比特率变化阈值
+
+      // 神经网络相关
+      nnConfidenceHigh: 0.8,          // 高置信度阈值
+      nnConfidenceMedium: 0.5,        // 中等置信度阈值
+      nnConfidenceLow: 0.3,           // 低置信度阈值
+
+      // 融合相关
+      fusionConfidenceThreshold: 0.6, // 融合置信度阈值
+      fusionDecisionThreshold: 0.4,   // 融合决策阈值
+      minDetectionSources: 1,         // 最小检测源数量
+
+      // 时长分析相关
+      shortSegmentThreshold: 0.5,     // 短片段阈值（秒）
+      longSegmentThreshold: 30,       // 长片段阈值（秒）
+      typicalAdDurations: [5, 10, 15, 30, 60], // 典型广告时长（秒）
+    },
+
+    // 缓存相关
+    cache: {
+      smallFileThreshold: 10240,      // 小文件阈值（字节，10KB）
+      largeFileThreshold: 102400,     // 大文件阈值（字节，100KB）
+      hitFrequencyThreshold: 3,       // 访问频率阈值
+      memoryCacheSize: 1000,          // 内存缓存大小
+    },
+
+    // 性能相关
+    performance: {
+      requestTimeout: 15000,          // 请求超时（毫秒）
+      connectionTimeout: 30000,       // 连接超时（毫秒）
+      maxRedirects: 5,                // 最大重定向次数
+      retryAttempts: 2,               // 重试次数
+      retryDelay: 1000,               // 重试延迟（毫秒）
+      compressionThreshold: 1024,     // 压缩阈值（字节）
+      compressionLevel: 6,            // 压缩级别
+    },
+
+    // 日志相关
+    logging: {
+      maxMemoryLogs: 1000,            // 最大内存日志数
+      logRotationMaxSize: 10485760,   // 日志轮转最大大小（字节，10MB）
+      logRotationMaxFiles: 5,         // 日志轮转最大文件数
+    },
+
+    // 安全相关
+    security: {
+      maxM3U8Size: 20971520,          // 最大M3U8文件大小（字节，20MB）
+      rateLimitWindow: 60000,         // 速率限制窗口（毫秒，1分钟）
+      rateLimitMax: 200,              // 速率限制最大请求数
+      jwtSecretMinLength: 32,         // JWT密钥最小长度
+    }
+  },
+
   // 认证配置
   auth: {
     enabled: process.env.AUTH_ENABLED !== 'false',

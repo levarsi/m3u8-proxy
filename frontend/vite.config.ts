@@ -26,7 +26,10 @@ export default defineConfig({
       '/logs': 'http://127.0.0.1:3000',
       '/config': 'http://127.0.0.1:3000',
       '/ad-filter': 'http://127.0.0.1:3000',
-      '/ts-detector': 'http://127.0.0.1:3000'
+      '/ts-detector': 'http://127.0.0.1:3000',
+      '/auth': 'http://127.0.0.1:3000',
+      '/nn-model': 'http://127.0.0.1:3000',
+      '/mock-stream.m3u8': 'http://127.0.0.1:3000'
     }
   }
 });
