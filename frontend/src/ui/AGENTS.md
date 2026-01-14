@@ -1,28 +1,26 @@
 # PROJECT KNOWLEDGE BASE - UI
 
-**Generated:** Sun Jan 11 2026
+**Generated:** Wed Jan 14 2026 20:57:08
 **Directory:** ./frontend/src/ui
 
 ## OVERVIEW
-Reusable UI components for React frontend.
-
-## STRUCTURE
-```
-ui/
-├── *.tsx    # UI components
-```
+Reusable React UI components with Tailwind styling.
 
 ## WHERE TO LOOK
-| Task | Location | Notes |
-|------|----------|-------|
-| Buttons | Button.tsx | Styled buttons |
-| Inputs | Input.tsx | Form inputs |
-| Layout | Layout.tsx | Page layout |
+| Task | File | Notes |
+|------|------|-------|
+| Buttons | Button.tsx | Variants: primary, secondary, danger |
+| Cards | Card.tsx | Container with header/footer |
+| Layout | Layout.tsx | Main app shell with sidebar |
+| Input | Input.tsx | Form fields with validation |
+| Table | Table.tsx | Data display with sorting |
 
 ## CONVENTIONS
-- Tailwind CSS classes
+- Tailwind CSS for all styling
 - TypeScript interfaces
-- Reusable design
+- Prop-driven variants (variant, size, disabled)
+- No internal state (controlled components)
 
 ## ANTI-PATTERNS
-None.
+- Some components lack loading states
+- Missing accessibility attributes (aria-*)

@@ -1,38 +1,45 @@
 # PROJECT KNOWLEDGE BASE - Frontend
 
-**Generated:** Sun Jan 11 2026
+**Generated:** Wed Jan 14 2026 20:57:08
 **Directory:** ./frontend
 
 ## OVERVIEW
-React frontend for M3U8 proxy with HLS.js player and Tailwind CSS.
+React 18 admin panel with HLS.js player, TanStack Query state, and Tailwind CSS styling.
 
 ## STRUCTURE
 ```
 frontend/
 ├── src/
-│   ├── views/     # Page components
-│   ├── ui/        # UI components
-│   └── lib/       # Utilities
-├── package.json   # Dependencies
-├── vite.config.ts # Build config
-├── tsconfig.json  # TypeScript config
-└── tailwind.config.js # Styling config
+│   ├── views/        # Route pages (Home, Settings, Test, Stats)
+│   ├── ui/           # Reusable components (Button, Card, Layout)
+│   └── lib/          # API client, hooks, utils
+├── package.json      # React, Vite, Tailwind, TanStack Query
+├── vite.config.ts    # Dev server, proxy to :3000
+├── tsconfig.json     # Strict TypeScript, path aliases
+└── tailwind.config.js # Dark mode, custom theme
 ```
 
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Component development | src/views/ | Page-level components |
-| UI elements | src/ui/ | Reusable components |
-| Utilities | src/lib/ | Helper functions |
-| Build config | vite.config.ts | Dev server, proxy |
-| Styling | tailwind.config.js | Theme customization |
+| Pages | src/views/ | Route components |
+| UI kit | src/ui/ | Buttons, cards, layout |
+| API | src/lib/api.ts | Backend communication |
+| Build | vite.config.ts | Proxy, plugins |
+| Theme | tailwind.config.js | Colors, dark mode |
 
 ## CONVENTIONS
-- TypeScript with strict mode
-- Tailwind CSS with class-based dark mode
-- Path aliases (@/* to ./src/*)
-- Vite for build and dev server
+- TypeScript strict mode
+- Tailwind CSS with `dark:` variants
+- Path aliases: `@/*` → `./src/*`
+- TanStack Query for async state
+- One component per file
 
 ## ANTI-PATTERNS
-None.
+- No unit/integration tests for components
+- API client lacks error boundary handling
+
+## UNIQUE STYLES
+- HLS.js integration for stream playback
+- Real-time stats polling (5s interval)
+- Class-based dark mode toggle
